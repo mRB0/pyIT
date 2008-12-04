@@ -10,13 +10,11 @@ import wx.grid
 
 
 
-class Notebook(wx.Panel):
+class Notebook(wx.Notebook):
     def __init__(self, *args, **kwds):
         kwds["style"] = 0
-        #wx.Notebook.__init__(self, *args, **kwds)
-        wx.Panel.__init__(self, *args, **kwds)
-        #self.samplePane = wx.Panel(self, -1)
-        self.samplePane = self
+        wx.Notebook.__init__(self, *args, **kwds)
+        self.samplePane = wx.Panel(self, -1)
         
         self.sampleSplitter = wx.SplitterWindow(self.samplePane, -1, style=wx.SP_3D|wx.SP_BORDER)
         
@@ -33,11 +31,11 @@ class Notebook(wx.Panel):
         
         self.btnFoo = wx.Button(self.sampleBottomPane, -1, "Foo")
         
-        #self.instrumentPane = wx.Panel(self, -1)
-        #self.footext = wx.StaticText(self.instrumentPane, -1, "Foo")
+        self.instrumentPane = wx.Panel(self, -1)
+        self.footext = wx.StaticText(self.instrumentPane, -1, "Foo")
         
-        #self.messagePane = wx.Panel(self, -1)
-        #self.bartext = wx.StaticText(self.messagePane, -1, "Bar")
+        self.messagePane = wx.Panel(self, -1)
+        self.bartext = wx.StaticText(self.messagePane, -1, "Bar")
 
         self.__set_properties()
         self.__do_layout()
@@ -46,9 +44,9 @@ class Notebook(wx.Panel):
         self.Bind(wx.EVT_BUTTON, self.samplesUndoFile, self.btnSamplesUndoFile)
 
     def __set_properties(self):
-        #self.AddPage(self.samplePane, "Samples")
-        #self.AddPage(self.instrumentPane, "Instruments")
-        #self.AddPage(self.messagePane, "Message")
+        self.AddPage(self.samplePane, "Samples")
+        self.AddPage(self.instrumentPane, "Instruments")
+        self.AddPage(self.messagePane, "Message")
         self.samplesGridFile.CreateGrid(99, 1)
         #self.samplesGridFile.EnableDragColSize(0)
         #self.samplesGridFile.EnableDragRowSize(0)
@@ -122,13 +120,13 @@ class Notebook(wx.Panel):
         szrSamplesGrid.AddGrowableRow(0)
         
         # fill other panes
-        #bs = wx.BoxSizer(wx.VERTICAL)
-        #bs.Add(self.footext)
-        #self.instrumentPane.SetSizer(bs)
+        bs = wx.BoxSizer(wx.VERTICAL)
+        bs.Add(self.footext)
+        self.instrumentPane.SetSizer(bs)
         
-        #bs = wx.BoxSizer(wx.VERTICAL)
-        #bs.Add(self.bartext)
-        #self.messagePane.SetSizer(bs)
+        bs = wx.BoxSizer(wx.VERTICAL)
+        bs.Add(self.bartext)
+        self.messagePane.SetSizer(bs)
         
 
     def samplesCommitFile(self, event): # wxGlade: Notebook.<event_handler>
@@ -147,13 +145,13 @@ class EditFrame(wx.Frame):
         # begin wxGlade: EditFrame.__init__
         kwds["style"] = wx.DEFAULT_FRAME_STYLE
         wx.Frame.__init__(self, *args, **kwds)
-        #self.splitItUp = wx.SplitterWindow(self, -1, style=wx.SP_3D|wx.SP_BORDER)
-        #self.editPane = wx.Panel(self, -1)
-        #self.filePane = wx.Panel(self.splitItUp, -1)
-        #self.chDirChooser = wx.Choice(self.filePane, -1, choices=[])
-        #self.lbFileList = wx.CheckListBox(self.filePane, -1, choices=[])
-        #self.cbSelectAll = wx.CheckBox(self.filePane, -1, "Select all")
-        self.nbEdits = Notebook(self, -1)
+        self.splitItUp = wx.SplitterWindow(self, -1, style=wx.SP_3D|wx.SP_BORDER)
+        self.editPane = wx.Panel(self.splitItUp, -1)
+        self.filePane = wx.Panel(self.splitItUp, -1)
+        self.chDirChooser = wx.Choice(self.filePane, -1, choices=[])
+        self.lbFileList = wx.CheckListBox(self.filePane, -1, choices=[])
+        self.cbSelectAll = wx.CheckBox(self.filePane, -1, "Select all")
+        self.nbEdits = Notebook(self.editPane, -1)
 
         self.__set_properties()
         self.__do_layout()
@@ -167,26 +165,23 @@ class EditFrame(wx.Frame):
     def __do_layout(self):
         # begin wxGlade: EditFrame.__do_layout
         mainSizer = wx.BoxSizer(wx.VERTICAL)
-        #editSizer = wx.BoxSizer(wx.VERTICAL)
-        #leftPanelSizer = wx.BoxSizer(wx.VERTICAL)
-        #leftPanelSizer.Add(self.chDirChooser, 0, wx.EXPAND, 0)
-        #leftPanelSizer.Add(self.lbFileList, 1, wx.EXPAND, 0)
-        #leftPanelSizer.Add(self.cbSelectAll, 0, 0, 0)
-        #self.filePane.SetSizer(leftPanelSizer)
-        
-        mainSizer.Add(self.nbEdits, 1, wx.EXPAND, 0)
-        #self.editPane.SetSizer(mainSizer)
-        #self.splitItUp.SplitVertically(self.filePane, self.editPane)
-        #mainSizer.Add(self.splitItUp, 1, wx.EXPAND, 0)
-        
-        #mainSizer.Add(self.editPane)
+        editSizer = wx.BoxSizer(wx.VERTICAL)
+        leftPanelSizer = wx.BoxSizer(wx.VERTICAL)
+        leftPanelSizer.Add(self.chDirChooser, 0, wx.EXPAND, 0)
+        leftPanelSizer.Add(self.lbFileList, 1, wx.EXPAND, 0)
+        leftPanelSizer.Add(self.cbSelectAll, 0, 0, 0)
+        self.filePane.SetSizer(leftPanelSizer)
+        editSizer.Add(self.nbEdits, 1, wx.EXPAND, 0)
+        self.editPane.SetSizer(editSizer)
+        self.splitItUp.SplitVertically(self.filePane, self.editPane)
+        mainSizer.Add(self.splitItUp, 1, wx.EXPAND, 0)
         
         self.SetSizer(mainSizer)
         mainSizer.Fit(self)
         self.Layout()
         # end wxGlade
         self.SetSize((500, 400))
-        #self.splitItUp.SetSashPosition(100)
+        self.splitItUp.SetSashPosition(100)
 
 # end of class EditFrame
 
