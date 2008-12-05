@@ -6,10 +6,159 @@ from __future__ import division
  
 import wx
 import wx.grid
- 
+
+import traceback
+
 # begin wxGlade: extracode
 # end wxGlade
  
+class CommentGrid(wx.grid.Grid):
+    def __init__(self, *args, **kwds):
+        wx.grid.Grid.__init__(self, *args, **kwds)
+        
+        self.__set_properties()
+        self.__do_layout()
+    
+    def __set_properties(self):
+        self.CreateGrid(99, 1)
+        #self.EnableDragColSize(0)
+        #self.EnableDragRowSize(0)
+        
+        # find out width of font so we know how to set proper row label width
+ 
+        dc = wx.ScreenDC()
+        fontwidth = 0
+        dc.SetFont(self.GetLabelFont())
+ 
+        for i in xrange(99):
+            fw = dc.GetTextExtent("99m")[0] # adds a half-m space to either side
+            if fw > fontwidth:
+                fontwidth = fw
+            self.SetRowLabelValue(i, unicode(i+1))
+ 
+        self.SetRowLabelSize(fontwidth)
+        self.SetColLabelSize(0)
+ 
+        self.SetDefaultCellFont(wx.SystemSettings.GetFont(wx.SYS_ANSI_FIXED_FONT))
+        
+        dc.SetFont(wx.SystemSettings.GetFont(wx.SYS_ANSI_FIXED_FONT))
+        fontwidth = dc.GetTextExtent(26*"m")[0]
+        del dc
+ 
+        self.SetColMinimalWidth(0, fontwidth)
+        self.SetColSize(0, fontwidth)
+        self.ForceRefresh()
+        
+    def __do_layout(self):
+        pass
+        
+
+class ListEditorPane(wx.Panel):
+    def __init__(self, *args, **kwds):
+        wx.Panel.__init__(self, *args, **kwds)
+        
+        self.splitter = wx.SplitterWindow(self, -1, style=wx.SP_3D|wx.SP_BORDER)
+ 
+        self.bottomPane = wx.Panel(self.splitter, -1)
+        self.topPane = wx.Panel(self.splitter, -1)
+ 
+        self.lblFilename = wx.StaticText(self.topPane, -1, "File:")
+        self.txtFilename = wx.TextCtrl(self.topPane, -1, "", style=wx.TE_READONLY|wx.NO_BORDER)
+        self.gridFile = CommentGrid(self.topPane, -1, size=(1, 1))
+        
+        
+        self.btnCommitFile = wx.Button(self.topPane, -1, "Commit")
+        self.btnRevertFile = wx.Button(self.topPane, -1, "Revert")
+        self.btnCopyFile = wx.Button(self.topPane, -1, "Copy")
+        self.btnPasteFile = wx.Button(self.topPane, -1, "Paste")
+        
+        self.lblChecked = wx.StaticText(self.bottomPane, -1, "Checkmarked files")
+        self.gridChecked = CommentGrid(self.bottomPane, -1, size=(1, 1))
+        #self.gridChecked = wx.StaticText(self.bottomPane, -1, "hAhAhA!!")
+        self.btnCommitChecked = wx.Button(self.bottomPane, -1, "Commit")
+        self.btnRevertChecked = wx.Button(self.bottomPane, -1, "Revert")
+        self.btnCopyChecked = wx.Button(self.bottomPane, -1, "Copy")
+        self.btnPasteChecked = wx.Button(self.bottomPane, -1, "Paste")
+
+        self.__set_properties()
+        self.__do_layout()
+    
+    def __set_properties(self):
+        self.txtFilename.SetBackgroundColour(wx.SystemSettings.GetColour(wx.SYS_COLOUR_3DFACE))
+        self.txtFilename.SetValue("(none)")
+    
+    def __do_layout(self):
+        outerSizer = wx.BoxSizer(wx.VERTICAL)
+        
+        # top half (edit file)
+        
+        szrFilenameGrid = wx.BoxSizer(wx.VERTICAL)
+        szrTopGrid = wx.FlexGridSizer(2, 2, 4, 4)
+        szrCopyPaste = wx.BoxSizer(wx.HORIZONTAL)
+        szrCommitRevert = wx.BoxSizer(wx.VERTICAL)
+        szrFilenameLabel = wx.BoxSizer(wx.HORIZONTAL)
+        szrFilenameLabel.Add(self.lblFilename, 0, wx.ALL, 4)
+        szrFilenameLabel.Add(self.txtFilename, 1, wx.ALIGN_CENTER_VERTICAL|wx.ALL, 4)
+        szrFilenameGrid.Add(szrFilenameLabel, 0, wx.EXPAND, 0)
+        szrTopGrid.Add(self.gridFile, 1, wx.EXPAND, 0)
+        szrCommitRevert.Add(self.btnCommitFile, 0, wx.ALL, 2)
+        szrCommitRevert.Add(self.btnRevertFile, 0, wx.ALL, 2)
+        szrTopGrid.Add(szrCommitRevert, 0, wx.ALIGN_CENTER_VERTICAL, 0)
+        szrCopyPaste.Add(self.btnCopyFile, 0, wx.ALL, 2)
+        szrCopyPaste.Add(self.btnPasteFile, 0, wx.ALL, 2)
+        szrTopGrid.Add(szrCopyPaste, 1, wx.ALIGN_CENTER_HORIZONTAL, 0)
+        szrTopGrid.Add((0, 0), 0, 0, 0)
+        szrFilenameGrid.Add(szrTopGrid, 1, wx.EXPAND, 0)
+        self.topPane.SetSizer(szrFilenameGrid)
+        
+        szrTopGrid.AddGrowableCol(0)
+        szrTopGrid.AddGrowableRow(0)
+
+        # bottom half (edit checked)
+        
+        szrBottomGrid = wx.FlexGridSizer(3, 2, 4, 4)
+        szrBottomGrid.Add(self.lblChecked, 0, wx.ALL, 4)
+        szrBottomGrid.Add((0, 0), 0, 0, 0)
+        
+        szrBottomGrid.Add(self.gridChecked, 1, wx.EXPAND, 0)
+        
+        szrCopyPaste = wx.BoxSizer(wx.HORIZONTAL)
+        szrCommitRevert = wx.BoxSizer(wx.VERTICAL)
+        
+        szrCommitRevert.Add(self.btnCommitChecked, 0, wx.ALL, 2)
+        szrCommitRevert.Add(self.btnRevertChecked, 0, wx.ALL, 2)
+        
+        szrBottomGrid.Add(szrCommitRevert, 0, wx.ALIGN_CENTER_VERTICAL, 0)
+        
+        szrCopyPaste.Add(self.btnCopyChecked, 0, wx.ALL, 2)
+        szrCopyPaste.Add(self.btnPasteChecked, 0, wx.ALL, 2)
+        
+        szrBottomGrid.Add(szrCopyPaste, 1, wx.ALIGN_CENTER_HORIZONTAL, 0)
+        
+        szrBottomGrid.Add((0, 0), 0, 0, 0)
+        
+        #szrFilenameGrid.Add(szrBottomGrid, 1, wx.EXPAND, 0)
+        self.bottomPane.SetSizer(szrBottomGrid)
+        
+        szrBottomGrid.AddGrowableCol(0)
+        szrBottomGrid.AddGrowableRow(1)
+        
+        # ok
+        
+        self.splitter.SplitHorizontally(self.topPane, self.bottomPane)
+        outerSizer.Add(self.splitter, 1, wx.EXPAND, 0)
+ 
+        #outerSizer.Add(self.topPane, 0, wx.EXPAND, 0)
+        #outerSizer.Add(self.bottomPane, 0, wx.EXPAND, 0)
+        self.SetSizer(outerSizer)
+ 
+        #self.sampleTopPane.SetMinSize((0, 50))
+        #self.sampleTopPane.SetSize((100, 100))
+        #self.sampleBottomPane.SetSize((100, 100))
+        #self.sampleBottomPane.SetMinSize((0, 30))
+        #self.Layout()
+        #print self.GetSize()
+        self.splitter.SetSashPosition(200)#self.GetSize()[0] / 2)
  
  
 class Notebook(wx.Notebook):
@@ -17,26 +166,8 @@ class Notebook(wx.Notebook):
         kwds["style"] = 0
         wx.Notebook.__init__(self, *args, **kwds)
  
-        self.samplePane = wx.Panel(self, -1)
- 
-        self.sampleSplitter = wx.SplitterWindow(self.samplePane, -1, style=wx.SP_3D|wx.SP_BORDER)
- 
-        #self.sampleBottomPane = wx.Panel(self.samplePane, -1)
-        #self.sampleTopPane = wx.Panel(self.samplePane, -1)
-        self.sampleBottomPane = wx.Panel(self.sampleSplitter, -1)
-        self.sampleTopPane = wx.Panel(self.sampleSplitter, -1)
- 
-        self.lblFilename = wx.StaticText(self.sampleTopPane, -1, "File:")
-        self.txtFilename = wx.TextCtrl(self.sampleTopPane, -1, "", style=wx.TE_READONLY|wx.NO_BORDER)
-        self.samplesGridFile = wx.grid.Grid(self.sampleTopPane, -1, size=(1, 1))
- 
-        self.btnSamplesCommitFile = wx.Button(self.sampleTopPane, -1, "Commit")
-        self.btnSamplesUndoFile = wx.Button(self.sampleTopPane, -1, "Revert")
-        self.btnSamplesCopyFile = wx.Button(self.sampleTopPane, -1, "Copy")
-        self.btnSamplesPasteFile = wx.Button(self.sampleTopPane, -1, "Paste")
- 
-        self.btnFoo = wx.Button(self.sampleBottomPane, -1, "Foo")
- 
+        self.samplePane = ListEditorPane(self, -1)
+
         self.instrumentPane = wx.Panel(self, -1)
         self.footext = wx.StaticText(self.instrumentPane, -1, "Foo")
 
@@ -46,8 +177,8 @@ class Notebook(wx.Notebook):
         self.__set_properties()
         self.__do_layout()
  
-        self.Bind(wx.EVT_BUTTON, self.samplesCommitFile, self.btnSamplesCommitFile)
-        self.Bind(wx.EVT_BUTTON, self.samplesUndoFile, self.btnSamplesUndoFile)
+        self.Bind(wx.EVT_BUTTON, self.samplesCommitFile, self.samplePane.btnCommitFile)
+        self.Bind(wx.EVT_BUTTON, self.samplesRevertFile, self.samplePane.btnRevertFile)
         
         self.Bind(wx.EVT_SIZE, self.onResize, self)
  
@@ -55,84 +186,9 @@ class Notebook(wx.Notebook):
         self.AddPage(self.samplePane, "Samples")
         self.AddPage(self.instrumentPane, "Instruments")
         self.AddPage(self.messagePane, "Message")
-        self.samplesGridFile.CreateGrid(99, 1)
-        #self.samplesGridFile.EnableDragColSize(0)
-        #self.samplesGridFile.EnableDragRowSize(0)
  
- 
-        # find out width of font so we know how to set proper row label width
- 
-        dc = wx.ScreenDC()
-        fontwidth = 0
-        dc.SetFont(self.samplesGridFile.GetLabelFont())
- 
-        for i in xrange(99):
-          fw = dc.GetTextExtent("99m")[0] # adds a half-m to either side
-          if fw > fontwidth:
-            fontwidth = fw
-          self.samplesGridFile.SetRowLabelValue(i, unicode(i+1))
- 
-        self.samplesGridFile.SetRowLabelSize(fontwidth)
-        self.samplesGridFile.SetColLabelSize(0)
- 
-        self.samplesGridFile.SetDefaultCellFont(wx.SystemSettings.GetFont(wx.SYS_ANSI_FIXED_FONT))
- 
-        dc.SetFont(wx.SystemSettings.GetFont(wx.SYS_ANSI_FIXED_FONT))
-        fontwidth = dc.GetTextExtent(26*"m")[0]
-        del dc
- 
-        self.samplesGridFile.SetColMinimalWidth(0, fontwidth)
-        self.samplesGridFile.SetColSize(0, fontwidth)
-        self.samplesGridFile.ForceRefresh()
- 
-        self.txtFilename.SetBackgroundColour(wx.SystemSettings.GetColour(wx.SYS_COLOUR_3DFACE))
-        self.txtFilename.SetValue("(none)")
  
     def __do_layout(self):
-        sampleSizer = wx.BoxSizer(wx.VERTICAL)
-        szrFilenameSamplesGrid = wx.BoxSizer(wx.VERTICAL)
-        szrSamplesGrid = wx.FlexGridSizer(2, 2, 4, 4)
-        #szrSamplesGrid = wx.BoxSizer(wx.VERTICAL)
-        
-        szrCopyPaste = wx.BoxSizer(wx.HORIZONTAL)
-        szrCommitUndo = wx.BoxSizer(wx.VERTICAL)
-        szrFilenameLabel = wx.BoxSizer(wx.HORIZONTAL)
-        szrFilenameLabel.Add(self.lblFilename, 0, wx.ALL, 4)
-        szrFilenameLabel.Add(self.txtFilename, 1, wx.ALIGN_CENTER_VERTICAL|wx.ALL, 4)
-        szrFilenameSamplesGrid.Add(szrFilenameLabel, 0, wx.EXPAND, 0)
-        szrSamplesGrid.Add(self.samplesGridFile, 1, wx.EXPAND, 0)
-        szrCommitUndo.Add(self.btnSamplesCommitFile, 0, 0, 0)
-        szrCommitUndo.Add(self.btnSamplesUndoFile, 0, 0, 0)
-        szrSamplesGrid.Add(szrCommitUndo, 0, wx.ALIGN_CENTER_VERTICAL, 0)
-        szrCopyPaste.Add(self.btnSamplesCopyFile, 0, 0, 0)
-        szrCopyPaste.Add(self.btnSamplesPasteFile, 0, 0, 0)
-        szrSamplesGrid.Add(szrCopyPaste, 1, wx.EXPAND, 0)
-        szrSamplesGrid.Add((0, 0), 0, 0, 0)
-        szrFilenameSamplesGrid.Add(szrSamplesGrid, 1, wx.EXPAND, 0)
-        self.sampleTopPane.SetSizer(szrFilenameSamplesGrid)
- 
-        bsizer_1 = wx.BoxSizer(wx.VERTICAL)
-        bsizer_1.Add(self.btnFoo, 0, 0, 0)
-        self.sampleBottomPane.SetSizer(bsizer_1)
- 
-        self.sampleSplitter.SplitHorizontally(self.sampleTopPane, self.sampleBottomPane)
-        sampleSizer.Add(self.sampleSplitter, 1, wx.EXPAND, 0)
- 
-        #sampleSizer.Add(self.sampleTopPane, 0, wx.EXPAND, 0)
-        #sampleSizer.Add(self.sampleBottomPane, 0, wx.EXPAND, 0)
-        self.samplePane.SetSizer(sampleSizer)
- 
-        #self.sampleTopPane.SetMinSize((0, 50))
-        #self.sampleTopPane.SetSize((100, 100))
-        #self.sampleBottomPane.SetSize((100, 100))
-        #self.sampleBottomPane.SetMinSize((0, 30))
-        #self.Layout()
-        #print self.GetSize()
-        self.sampleSplitter.SetSashPosition(200)#self.GetSize()[0] / 2)
- 
-        # end wxGlade
-        szrSamplesGrid.AddGrowableCol(0)
-        szrSamplesGrid.AddGrowableRow(0)
  
         # fill other panes
         bs = wx.BoxSizer(wx.VERTICAL)
@@ -145,23 +201,23 @@ class Notebook(wx.Notebook):
  
  
     def onResize(self, event):
-        print "resize event"
-        print "sash =", self.sampleSplitter.GetSashPosition()
-        print "size =", self.GetSize()
-        print "event size =", event.GetSize()
+        #print "resize event"
+        #print "sash =", self.samplePane.splitter.GetSashPosition()
+        #print "size =", self.GetSize()
+        #print "event size =", event.GetSize()
         
         try:
           self.oldSize
         except:
           self.oldSize = event.GetSize()
-          print "no old size"
+          #print "no old size"
           return
         
-        print self.oldSize
-        ratio = self.sampleSplitter.GetSashPosition() / self.oldSize[1]
+        #print self.oldSize
+        ratio = self.samplePane.splitter.GetSashPosition() / self.oldSize[1]
         
-        print "ratio =", ratio
-        self.sampleSplitter.SetSashPosition(ratio * event.GetSize()[1])
+        #print "ratio =", ratio
+        self.samplePane.splitter.SetSashPosition(ratio * event.GetSize()[1])
         
         self.oldSize = event.GetSize()
         
@@ -171,8 +227,8 @@ class Notebook(wx.Notebook):
         print "Event handler `samplesCommitFile' not implemented"
         event.Skip()
  
-    def samplesUndoFile(self, event): # wxGlade: Notebook.<event_handler>
-        print "Event handler `samplesUndoFile' not implemented"
+    def samplesRevertFile(self, event): # wxGlade: Notebook.<event_handler>
+        print "Event handler `samplesRevertFile' not implemented"
         event.Skip()
  
 # end of class Notebook
@@ -190,14 +246,21 @@ class EditFrame(wx.Frame):
         self.lbFileList = wx.CheckListBox(self.filePane, -1, choices=[])
         self.cbSelectAll = wx.CheckBox(self.filePane, -1, "Select all")
         self.nbEdits = Notebook(self.editPane, -1)
- 
+        
         self.__set_properties()
         self.__do_layout()
         # end wxGlade
- 
+        
+        self.directories = ['C:\\Users\\Mike\\Documents\\mods']
+        # 0 is always the current dir !!!! because it
+        # gets moved to the top!!!
+        # self.directory_idx = 0   
+        
+        self.loadDir()
+
     def __set_properties(self):
         # begin wxGlade: EditFrame.__set_properties
-        self.SetTitle("EDIT ME UP")
+        self.SetTitle("EDIT ME UP MORANS")
         # end wxGlade
  
     def __do_layout(self):
@@ -221,11 +284,14 @@ class EditFrame(wx.Frame):
         self.SetSize((500, 400))
         self.splitItUp.SetSashPosition(100)
         
-        print self.nbEdits.GetSize()
-        print "*** setting sash position and size"
-        self.nbEdits.sampleSplitter.SetSashPosition(self.nbEdits.GetSize()[1]/2)
+        #print self.nbEdits.GetSize()
+        #print "*** setting sash position and size"
+        self.nbEdits.samplePane.splitter.SetSashPosition(self.nbEdits.GetSize()[1]/2)
         self.nbEdits.oldSize = self.nbEdits.GetSize()
         #print self.nbEdits.sampleSplitter.GetSashPosition()
+    
+    def loadDir(self):
+        self.directories[0]
  
 # end of class EditFrame
  
@@ -241,5 +307,9 @@ class Bitesy(wx.App):
 # end of class Bitesy
  
 if __name__ == "__main__":
-    bitesy = Bitesy(0)
-    bitesy.MainLoop()
+    try:
+        bitesy = Bitesy(0)
+        bitesy.MainLoop()
+    except:
+        traceback.print_exc()
+        raw_input("\n\nPress enter to exit...")
