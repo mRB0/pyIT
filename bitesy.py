@@ -5,6 +5,7 @@
 from __future__ import division
 
 import os, os.path
+import random
  
 import wx
 import wx.grid
@@ -239,6 +240,15 @@ class Notebook(wx.Notebook):
  
  
 class EditFrame(wx.Frame):
+    dir_choose_messages = (
+        u"Please choose a directory.",
+        u"WHERE.",
+        u"WHERE. TELL ME NOW.",
+        u"Just ... pick one, already.",
+        u"The directory should have mods in it.  Just sayin'.",
+        u"brb"   
+    )
+    
     def __init__(self, *args, **kwds):
         # begin wxGlade: EditFrame.__init__
         kwds["style"] = wx.DEFAULT_FRAME_STYLE
@@ -255,13 +265,16 @@ class EditFrame(wx.Frame):
         self.__do_layout()
         # end wxGlade
         
-        self.directories = [u'C:\\Users\\Mike\\Documents\\mods']
+        #self.directories = [u'C:\\Users\\Mike\\Documents\\mods']
+        self.directories = []
         # 0 is always the current dir !!!! because it
         # gets moved to the top!!!
         # self.directory_idx = 0   
         
         self.Bind(wx.EVT_LISTBOX, self.onListSelect, self.lbFileList)
+        self.Bind(wx.EVT_CHOICE, self.onDirChoose, self.chDirChooser)
         
+        self.change_dir(os.getcwd())
         self.updateDirChooser()
 
     def __set_properties(self):
@@ -296,33 +309,77 @@ class EditFrame(wx.Frame):
         self.nbEdits.oldSize = self.nbEdits.GetSize()
         #print self.nbEdits.sampleSplitter.GetSashPosition()
     
+    def change_dir(self, new_dir):
+        os.chdir(new_dir)
+        if new_dir in self.directories:
+            old_idx = self.directories.index(new_dir)
+            del self.directories[old_idx]
+        self.directories.insert(0, new_dir)
+        if len(self.directories) > 6: # XXX maximum number of entries?
+            d.pop()
+        
+        self.updateDirChooser()
+    
+    def onDirChoose(self, event):
+        new_idx = self.chDirChooser.GetSelection()
+        print "Selected", new_idx
+        
+        if new_idx == len(self.directories): # chose "Browse"
+            dd = wx.DirDialog(self, self.dir_choose_messages[random.randrange(0, len(self.dir_choose_messages))], os.getcwd())
+            if (dd.ShowModal() == wx.ID_OK):
+                # user selected a new dir
+                self.change_dir(dd.GetPath())
+            else: # cancelled choice
+                self.chDirChooser.SetSelection(0)
+        else: # chose existing entry, bring it to top
+            new_dir = self.directories[new_idx]
+            del self.directories[new_idx]
+            self.directories.insert(0, new_dir)
+            self.updateDirChooser()
+        
+            
+        
     def updateDirChooser(self):
         self.chDirChooser.SetItems(self.directories)
         self.chDirChooser.SetSelection(0)
         
+        self.chDirChooser.Append("Browse...")
+        
         self.loadDir()
     
     def loadDir(self):
-        self.filelist = [f for f in os.listdir(self.directories[0]) if f.upper().endswith(u'.IT')]
-        self.filelist.sort()
-        self.lbFileList.SetItems(self.filelist)
+        if self.directories:
+            filelist = os.listdir(self.directories[0])
+            dirs = [d+u"\\" for d in filelist if os.path.isdir(os.path.join(self.directories[0], d))]
+            dirs.sort()
+            
+            self.filelist = [f for f in filelist if f.upper().endswith(u'.IT')]
+            self.filelist.sort()
+            self.filelist = dirs + self.filelist
+            self.lbFileList.SetItems(self.filelist)
+        else:
+            self.lbFileList.Clear()
     
     def onListSelect(self, event):
         filename = self.filelist[self.lbFileList.GetSelection()]
         filespec = os.path.join(self.directories[0], filename)
-        #print "loading", filespec
-        itf = pyIT.ITfile()
-        itf.open(filespec)
         
-        self.nbEdits.samplePane.txtFilename.SetValue(filename)
-        
-        grid = self.nbEdits.samplePane.gridFile
-        grid.ClearGrid()
-        i = 0
-        
-        for sample in itf.Samples:
-            grid.SetCellValue(i, 0, sample.SampleName)
-            i = i + 1
+        if os.path.isdir(filespec): # don't load directories
+            self.change_dir(filespec)
+        else:
+            #print "loading", filespec
+            itf = pyIT.ITfile()
+            itf.open(filespec)
+            
+            self.nbEdits.samplePane.txtFilename.SetValue(filename)
+            
+            grid = self.nbEdits.samplePane.gridFile
+            grid.ClearGrid()
+            i = 0
+            
+            for sample in itf.Samples:
+                grid.SetCellValue(i, 0, sample.SampleName)
+                i = i + 1
         
 
 # end of class EditFrame
