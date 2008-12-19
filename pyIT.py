@@ -144,7 +144,7 @@ class ITinstrument:
     outf.write(struct.pack('<HBB', self.FadeOut, self.PPS, self.PPC))
     outf.write(struct.pack('<BBBB', self.GbV, self.DfP, self.RV, self.RP))
     outf.write(struct.pack('<HBB', 0xadde, 0xbe, 0xef)) # unused data
-    outf.write(struct.pack('<26s', self.InstName[:25]))
+    outf.write(struct.pack('<26s', self.InstName[:25]+'\0'))
     outf.write(struct.pack('<BBBBH', self.IFC, self.IFR, self.MCh, self.MPr, self.MIDIBank))
     for smp in self.SampleTable:
       outf.write(struct.pack('<BB', smp[0], smp[1]))
@@ -165,7 +165,7 @@ class ITinstrument:
      discard) = struct.unpack('<BBBBHBBBBBBHBB', inf.read(16))
     assert(zero == 0x0)
     
-    self.InstName = inf.read(26).split('\0')[0]
+    self.InstName = inf.read(26).replace('\0', ' ')[:25]
     
     (self.IFC, self.IFR, self.MCh, self.MPr,
      self.MIDIBank) = struct.unpack('<BBBBH', inf.read(6))
@@ -247,7 +247,7 @@ class ITsample:
     
     outf.write(struct.pack('<4s12s', 'IMPS', self.Filename))
     outf.write(struct.pack('<BBBB', 0, self.GvL, flags, self.Vol))
-    outf.write(struct.pack('<26s', self.SampleName[:25]))
+    outf.write(struct.pack('<26s', self.SampleName[:25]+'\0'))
     outf.write(struct.pack('<BB', self.Cvt, self.DfP))
     outf.write(struct.pack('<I', self.sampleDataLen()))
     outf.write(struct.pack('<III', self.LoopBegin, self.LoopEnd, self.C5Speed))
@@ -271,7 +271,7 @@ class ITsample:
     self.IsPingPongLoop = bool(flags & 0x40)
     self.IsPingPongSusLoop = bool(flags & 0x80)
     
-    self.SampleName = inf.read(26).split('\0')[0]
+    self.SampleName = inf.read(26).replace('\0', ' ')[:25]
     
     (self.Cvt, self.DfP) = struct.unpack('<BB', inf.read(2))
     
@@ -408,7 +408,7 @@ class ITfile:
     
     if (self.Special & 0x0001) and (msglen > 0):
       inf.seek(offs_msg)
-      self.Message = inf.read(msglen).split('\0')[0].replace('\r', '\n')
+      self.Message = inf.read(msglen).replace('\0', ' ').replace('\r', '\n')[:-1]
     else:
       self.Message = ''
     
@@ -555,17 +555,14 @@ class ITfile:
 def process():
   itf = ITfile()
   
-  assert(len(sys.argv) == 3)
-  
-  sys.stderr.write(sys.argv[1])
+  assert(len(sys.argv) == 2)
   
   itf.open(sys.argv[1])
   
-  sys.stderr.write(' => ' + sys.argv[2])
+  for samp in itf.Samples:
+    print samp.SampleName.decode('cp437')
   
-  itf.write(sys.argv[2])
-  
-  sys.stderr.write('\n')
+  itf.write('new.it')
   
   # Create a mostly-empty .IT file
   #itf = ITfile()
