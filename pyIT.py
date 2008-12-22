@@ -18,7 +18,6 @@ creates an IT with the basic structure:
   sample data
 
 todo:
- - find out why mario2.it won't load (for some instrument, "IMPI" != "IMPI")
  - add some compatibility-making code: fix envelopes that have no points, etc.
  - create some exceptions to replace assertion errors
 """
