@@ -20,6 +20,8 @@ creates an IT with the basic structure:
 todo:
  - add some compatibility-making code: fix envelopes that have no points, etc.
  - create some exceptions to replace assertion errors
+ - remove redundant samples and instruments (already done for patterns)
+ 
 """
 
 import sys
@@ -513,8 +515,9 @@ class ITfile:
     outf.write(struct.pack('<BBBBBBHII', self.GV, self.MV, self.IS, self.IT,
                            self.Sep, self.PWD, len(message), msg_offs, 0))
     for x in self.ChannelPans:
-      if (x > 64):
-        x = 64
+      # x >= 128 == muted
+      if (x > 64 and x < 128):
+        x = 100 # surround
       elif x < 0:
         x = 0
       outf.write(struct.pack('<B', x))
@@ -556,7 +559,6 @@ class ITfile:
     
     # save patterns (packed)
     for x in pattern_list:
-      print x
       outf.write(struct.pack('<I', ptn_offsets[x]))
     
     assert(outf.tell() == msg_offs)
