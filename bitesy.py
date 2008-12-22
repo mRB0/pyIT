@@ -46,6 +46,8 @@ do_strftime = False
 # END SETTINGS
 #####################################################
 
+version = u"1.0"
+
 old_wx_message = """\
 It seems that you are using a version of wxWidgets
 that does not have wx.TextCtrl.ChangeValue.
@@ -540,7 +542,7 @@ class EditFrame(wx.Frame):
 
     def __set_properties(self):
         # begin wxGlade: EditFrame.__set_properties
-        self.SetTitle("bitesy bitles")
+        self.SetTitle(u"bitesy bitles "+version)
         # end wxGlade
  
     def __do_layout(self):
