@@ -92,7 +92,7 @@ class ListEditorPane(wx.Panel):
  
         self.lblFilename = wx.StaticText(self.topPane, -1, "File:")
         self.txtFilename = wx.TextCtrl(self.topPane, -1, "", style=wx.TE_READONLY|wx.NO_BORDER)
-        self.gridFile = CommentGrid(self.topPane, -1, size=(1, 1))
+        self.gridFile = CommentGrid(self.topPane, -1)#, size=(1, 1))
         
         
         self.btnCommitFile = wx.Button(self.topPane, -1, "Commit")
@@ -187,6 +187,112 @@ class ListEditorPane(wx.Panel):
         #print self.GetSize()
         self.splitter.SetSashPosition(200)#self.GetSize()[0] / 2)
  
+class MessageEditorPane(wx.Panel):
+    def __init__(self, *args, **kwds):
+        wx.Panel.__init__(self, *args, **kwds)
+        
+        self.splitter = wx.SplitterWindow(self, -1, style=wx.SP_3D|wx.SP_BORDER)
+ 
+        self.bottomPane = wx.Panel(self.splitter, -1)
+        self.topPane = wx.Panel(self.splitter, -1)
+ 
+        self.lblFilename = wx.StaticText(self.topPane, -1, u"File:")
+        self.txtFilename = wx.TextCtrl(self.topPane, -1, u"", style=wx.TE_READONLY|wx.NO_BORDER)
+        self.editorFile = wx.TextCtrl(self.topPane, -1, u'', style=wx.TE_MULTILINE)
+        
+        
+        self.btnCommitFile = wx.Button(self.topPane, -1, "Commit")
+        self.btnRevertFile = wx.Button(self.topPane, -1, "Revert")
+        self.btnCopyFile = wx.Button(self.topPane, -1, "Copy")
+        self.btnPasteFile = wx.Button(self.topPane, -1, "Paste")
+        
+        self.lblChecked = wx.StaticText(self.bottomPane, -1, "Checkmarked files")
+        self.editorChecked = wx.TextCtrl(self.bottomPane, -1, u'', style=wx.TE_MULTILINE)
+        self.btnCommitChecked = wx.Button(self.bottomPane, -1, "Commit")
+        self.btnRevertChecked = wx.Button(self.bottomPane, -1, "Revert")
+        self.btnCopyChecked = wx.Button(self.bottomPane, -1, "Copy")
+        self.btnPasteChecked = wx.Button(self.bottomPane, -1, "Paste")
+
+        self.__set_properties()
+        self.__do_layout()
+    
+    def __set_properties(self):
+        self.txtFilename.SetBackgroundColour(wx.SystemSettings.GetColour(wx.SYS_COLOUR_3DFACE))
+        self.txtFilename.SetValue("(none)")
+    
+    def __do_layout(self):
+        outerSizer = wx.BoxSizer(wx.VERTICAL)
+        
+        # top half (edit file)
+        
+        szrFilenameGrid = wx.BoxSizer(wx.VERTICAL)
+        szrTopGrid = wx.FlexGridSizer(2, 2, 4, 4)
+        szrCopyPaste = wx.BoxSizer(wx.HORIZONTAL)
+        szrCommitRevert = wx.BoxSizer(wx.VERTICAL)
+        szrFilenameLabel = wx.BoxSizer(wx.HORIZONTAL)
+        szrFilenameLabel.Add(self.lblFilename, 0, wx.ALL, 4)
+        szrFilenameLabel.Add(self.txtFilename, 1, wx.ALIGN_CENTER_VERTICAL|wx.ALL, 4)
+        szrFilenameGrid.Add(szrFilenameLabel, 0, wx.EXPAND, 0)
+        szrTopGrid.Add(self.editorFile, 1, wx.EXPAND, 0)
+        szrCommitRevert.Add(self.btnCommitFile, 0, wx.ALL, 2)
+        szrCommitRevert.Add(self.btnRevertFile, 0, wx.ALL, 2)
+        szrTopGrid.Add(szrCommitRevert, 0, wx.ALIGN_CENTER_VERTICAL, 0)
+        szrCopyPaste.Add(self.btnCopyFile, 0, wx.ALL, 2)
+        szrCopyPaste.Add(self.btnPasteFile, 0, wx.ALL, 2)
+        szrTopGrid.Add(szrCopyPaste, 1, wx.ALIGN_CENTER_HORIZONTAL, 0)
+        szrTopGrid.Add((0, 0), 0, 0, 0)
+        szrFilenameGrid.Add(szrTopGrid, 1, wx.EXPAND, 0)
+        self.topPane.SetSizer(szrFilenameGrid)
+        
+        szrTopGrid.AddGrowableCol(0)
+        szrTopGrid.AddGrowableRow(0)
+
+        # bottom half (edit checked)
+        
+        szrBottomGrid = wx.FlexGridSizer(3, 2, 4, 4)
+        szrBottomGrid.Add(self.lblChecked, 0, wx.ALL, 4)
+        szrBottomGrid.Add((0, 0), 0, 0, 0)
+        
+        szrBottomGrid.Add(self.editorChecked, 1, wx.EXPAND, 0)
+        
+        szrCopyPaste = wx.BoxSizer(wx.HORIZONTAL)
+        szrCommitRevert = wx.BoxSizer(wx.VERTICAL)
+        
+        szrCommitRevert.Add(self.btnCommitChecked, 0, wx.ALL, 2)
+        szrCommitRevert.Add(self.btnRevertChecked, 0, wx.ALL, 2)
+        
+        szrBottomGrid.Add(szrCommitRevert, 0, wx.ALIGN_CENTER_VERTICAL, 0)
+        
+        szrCopyPaste.Add(self.btnCopyChecked, 0, wx.ALL, 2)
+        szrCopyPaste.Add(self.btnPasteChecked, 0, wx.ALL, 2)
+        
+        szrBottomGrid.Add(szrCopyPaste, 1, wx.ALIGN_CENTER_HORIZONTAL, 0)
+        
+        szrBottomGrid.Add((0, 0), 0, 0, 0)
+        
+        #szrFilenameGrid.Add(szrBottomGrid, 1, wx.EXPAND, 0)
+        self.bottomPane.SetSizer(szrBottomGrid)
+        
+        szrBottomGrid.AddGrowableCol(0)
+        szrBottomGrid.AddGrowableRow(1)
+        
+        # ok
+        
+        self.splitter.SplitHorizontally(self.topPane, self.bottomPane)
+        outerSizer.Add(self.splitter, 1, wx.EXPAND, 0)
+ 
+        #outerSizer.Add(self.topPane, 0, wx.EXPAND, 0)
+        #outerSizer.Add(self.bottomPane, 0, wx.EXPAND, 0)
+        self.SetSizer(outerSizer)
+ 
+        #self.sampleTopPane.SetMinSize((0, 50))
+        #self.sampleTopPane.SetSize((100, 100))
+        #self.sampleBottomPane.SetSize((100, 100))
+        #self.sampleBottomPane.SetMinSize((0, 30))
+        #self.Layout()
+        #print self.GetSize()
+        self.splitter.SetSashPosition(200)#self.GetSize()[0] / 2)
+ 
  
 class Notebook(wx.Notebook):
     def __init__(self, *args, **kwds):
@@ -198,8 +304,7 @@ class Notebook(wx.Notebook):
         self.instrumentPane = ListEditorPane(self, -1)
         #self.footext = wx.StaticText(self.instrumentPane, -1, "Foo")
 
-        self.messagePane = wx.Panel(self, -1)
-        self.bartext = wx.StaticText(self.messagePane, -1, "Bar")
+        self.messagePane = MessageEditorPane(self, -1)
  
         self.__set_properties()
         self.__do_layout()
@@ -207,6 +312,7 @@ class Notebook(wx.Notebook):
         self.Bind(wx.EVT_SIZE, self.onResize, self)
         self.Bind(wx.EVT_SPLITTER_SASH_POS_CHANGED, self.onSashPosChange, self.samplePane.splitter) 
         self.Bind(wx.EVT_SPLITTER_SASH_POS_CHANGED, self.onSashPosChange, self.instrumentPane.splitter) 
+        self.Bind(wx.EVT_SPLITTER_SASH_POS_CHANGED, self.onSashPosChange, self.messagePane.splitter) 
         
     def __set_properties(self):
         self.AddPage(self.samplePane, "Samples")
@@ -215,21 +321,18 @@ class Notebook(wx.Notebook):
  
  
     def __do_layout(self):
- 
+        pass
         # fill other panes
         #bs = wx.BoxSizer(wx.VERTICAL)
         #bs.Add(self.footext)
         #self.instrumentPane.SetSizer(bs)
- 
-        bs = wx.BoxSizer(wx.VERTICAL)
-        bs.Add(self.bartext)
-        self.messagePane.SetSizer(bs)
  
     def onSashPosChange(self, event):
         #print "sash pos changed on",
         new_pos = event.GetEventObject().GetSashPosition()
         self.samplePane.splitter.SetSashPosition(new_pos) 
         self.instrumentPane.splitter.SetSashPosition(new_pos) 
+        self.messagePane.splitter.SetSashPosition(new_pos) 
         
     def onResize(self, event):
         #print "resize event"
@@ -251,6 +354,7 @@ class Notebook(wx.Notebook):
         new_sash_pos = ratio * event.GetSize()[1]
         self.samplePane.splitter.SetSashPosition(new_sash_pos)
         self.instrumentPane.splitter.SetSashPosition(new_sash_pos)
+        self.messagePane.splitter.SetSashPosition(new_sash_pos)
         
         self.oldSize = event.GetSize()
         
@@ -266,6 +370,7 @@ class EditFrame(wx.Frame):
         u"WHERE. TELL ME NOW.",
         u"Pick one, already.",
         u"The directory should have mods in it.  Just sayin'.",
+        u"Gimme a dingle",
         u"brb"
     )
     
@@ -303,26 +408,32 @@ class EditFrame(wx.Frame):
         
         self.Bind(wx.grid.EVT_GRID_CELL_CHANGE, self.onSampleChange, self.nbEdits.samplePane.gridFile)
         self.Bind(wx.grid.EVT_GRID_CELL_CHANGE, self.onInstChange, self.nbEdits.instrumentPane.gridFile)
+        self.Bind(wx.EVT_TEXT, self.onMessageChange, self.nbEdits.messagePane.editorFile)
         
         self.Bind(wx.grid.EVT_GRID_CELL_CHANGE, self.onSampleCheckedChange, self.nbEdits.samplePane.gridChecked)
         self.Bind(wx.grid.EVT_GRID_CELL_CHANGE, self.onInstCheckedChange, self.nbEdits.instrumentPane.gridChecked)
+        self.Bind(wx.EVT_TEXT, self.onMessageCheckedChange, self.nbEdits.messagePane.editorChecked)
         
         self.Bind(wx.EVT_BUTTON, self.onCommitFile, self.nbEdits.samplePane.btnCommitFile)
         self.Bind(wx.EVT_BUTTON, self.onRevertFile, self.nbEdits.samplePane.btnRevertFile)
         self.Bind(wx.EVT_BUTTON, self.onCommitFile, self.nbEdits.instrumentPane.btnCommitFile)
         self.Bind(wx.EVT_BUTTON, self.onRevertFile, self.nbEdits.instrumentPane.btnRevertFile)
+        self.Bind(wx.EVT_BUTTON, self.onCommitFile, self.nbEdits.messagePane.btnCommitFile)
+        self.Bind(wx.EVT_BUTTON, self.onRevertFile, self.nbEdits.messagePane.btnRevertFile)
         
         self.Bind(wx.EVT_BUTTON, self.onCommitChecked, self.nbEdits.samplePane.btnCommitChecked)
         self.Bind(wx.EVT_BUTTON, self.onRevertChecked, self.nbEdits.samplePane.btnRevertChecked)
         self.Bind(wx.EVT_BUTTON, self.onCommitChecked, self.nbEdits.instrumentPane.btnCommitChecked)
         self.Bind(wx.EVT_BUTTON, self.onRevertChecked, self.nbEdits.instrumentPane.btnRevertChecked)
+        self.Bind(wx.EVT_BUTTON, self.onCommitChecked, self.nbEdits.messagePane.btnCommitChecked)
+        self.Bind(wx.EVT_BUTTON, self.onRevertChecked, self.nbEdits.messagePane.btnRevertChecked)
         
         self.change_dir(os.getcwd())
         self.updateDirChooser()
 
     def __set_properties(self):
         # begin wxGlade: EditFrame.__set_properties
-        self.SetTitle("EDIT ME UP MORANS")
+        self.SetTitle("bitesy bitles")
         # end wxGlade
  
     def __do_layout(self):
@@ -343,12 +454,14 @@ class EditFrame(wx.Frame):
         mainSizer.Fit(self)
         self.Layout()
         # end wxGlade
-        self.SetSize((500, 400))
-        self.splitItUp.SetSashPosition(100)
+        self.SetSize((600, 500))
+        self.splitItUp.SetSashPosition(200)
         
         #print self.nbEdits.GetSize()
         #print "*** setting sash position and size"
         self.nbEdits.samplePane.splitter.SetSashPosition(self.nbEdits.GetSize()[1]/2)
+        self.nbEdits.instrumentPane.splitter.SetSashPosition(self.nbEdits.GetSize()[1]/2)
+        self.nbEdits.messagePane.splitter.SetSashPosition(self.nbEdits.GetSize()[1]/2)
         self.nbEdits.oldSize = self.nbEdits.GetSize()
         #print self.nbEdits.sampleSplitter.GetSashPosition()
     
@@ -386,7 +499,10 @@ class EditFrame(wx.Frame):
     def updateDirChooser(self):
         # I don't like to display trailing backslashes (trailing slashes
         # are ok but i need a general-case solution)
-        self.chDirChooser.SetItems([os.path.dirname(where) for where in self.directories])
+        
+        self.chDirChooser.Clear()
+        for item in [os.path.dirname(where) for where in self.directories]:
+            self.chDirChooser.Append(item)
         self.chDirChooser.SetSelection(0)
         
         self.chDirChooser.Append("Browse...")
@@ -482,14 +598,16 @@ class EditFrame(wx.Frame):
                 itf = self.opened['data']
                 self.nbEdits.samplePane.txtFilename.SetValue(filespec + u' *')
                 self.nbEdits.instrumentPane.txtFilename.SetValue(filespec + u' *')
+                self.nbEdits.messagePane.txtFilename.SetValue(filespec + u' *')
             else:
                 itf = pyIT.ITfile()
                 self.opened = {"filespec": filespec, "data": itf}
                 itf.open(filespec)
                 self.nbEdits.samplePane.txtFilename.SetValue(filespec)
                 self.nbEdits.instrumentPane.txtFilename.SetValue(filespec)
+                self.nbEdits.messagePane.txtFilename.SetValue(filespec)
             
-            # load samples, instruments, message
+            # load samples
             grid = self.nbEdits.samplePane.gridFile
             grid.ClearGrid()
             
@@ -498,17 +616,29 @@ class EditFrame(wx.Frame):
                 grid.SetCellValue(i, 0, sample.SampleName.decode(mod_encoding, "replace").rstrip(u' '))
                 i = i + 1
     
+            # load instruments
             grid = self.nbEdits.instrumentPane.gridFile
             grid.ClearGrid()
             i = 0
             for instrument in itf.Instruments:
+                if i == 99:
+                    print "too many instruments :( i can only handle 100"
+                    break
                 grid.SetCellValue(i, 0, instrument.InstName.decode(mod_encoding, "replace").rstrip(u' '))
                 i = i + 1
+            
+            # load message
+            try:
+                self.nbEdits.messagePane.editorFile.ChangeValue(itf.Message.decode(mod_encoding, "replace"))
+            except AttributeError:
+                # workaround for wx pre-2.7.1 (deprecated method)
+                self.nbEdits.messagePane.editorFile.SetValue(itf.Message.decode(mod_encoding, "replace"))
     
     def set_modified(self, filespec, data):
         if not filespec in self.modified_files:
             self.nbEdits.samplePane.txtFilename.SetValue(filespec + u' *')
             self.nbEdits.instrumentPane.txtFilename.SetValue(filespec + u' *')
+            self.nbEdits.messagePane.txtFilename.SetValue(filespec + u' *')
             self.modified_files[filespec] = data
         
         # xxx dir list doesn't show modification info yet
@@ -529,6 +659,25 @@ class EditFrame(wx.Frame):
         # perform transcoding to ensure that files will save properly 
         name = grid.GetCellValue(idx, 0)[:25].encode(mod_encoding, "replace")
         grid.SetCellValue(idx, 0, name.decode(mod_encoding, "replace"))
+        
+    def onMessageCheckedChange(self, event):
+        if not self.nbEdits.messagePane.editorChecked.IsModified():
+            # workaround for wx pre-2.7.1 (deprecated SetValue method)
+            event.Skip()
+        
+        #print "checked message change"
+        event.Skip()
+        
+    def onMessageChange(self, event):
+        if not self.nbEdits.messagePane.editorFile.IsModified():
+            # workaround for wx pre-2.7.1 (deprecated SetValue method)
+            event.Skip()
+        
+        itf = self.opened['data']
+        self.set_modified(self.opened['filespec'], itf)
+        
+        itf.Message = self.nbEdits.messagePane.editorFile.GetValue()[:7999].encode(mod_encoding, "replace")
+        event.Skip()
         
     def onSampleChange(self, event):
         #print "sample", event.GetRow(), "changed"
@@ -587,6 +736,9 @@ class EditFrame(wx.Frame):
             itf = pyIT.ITfile()
             itf.open(filespec)
             
+            # song message
+            itf.Message = self.nbEdits.messagePane.editorChecked.GetValue()[:7999].encode(mod_encoding, "replace")
+
             # load samples/instruments from grid and put into itf
             fields = [
                 {'grid': self.nbEdits.samplePane.gridChecked,
@@ -604,7 +756,9 @@ class EditFrame(wx.Frame):
                 metadata = field['metadata']
                 namefield = field['namefield']
                 blank = field['blank']
-            
+                
+                last_populated_idx = 0
+                
                 n = grid.GetNumberRows()
                 for idx in xrange(n):
                     name = grid.GetCellValue(idx, 0)
@@ -625,13 +779,13 @@ class EditFrame(wx.Frame):
                 
                 # clear all entries, add empty spaces for additional required lines
                 for line in metadata:
-                    print "erasing", line.__dict__[namefield]
+                    #print "erasing", line.__dict__[namefield]
                     line.__dict__[namefield] = ''
                 while last_populated_idx+1 > len(metadata): # add samples
                     metadata.append(blank())
     
                 for idx in xrange(last_populated_idx+1):
-                    metadata[idx].__dict__[namefield] = grid.GetCellValue(idx, 0).encode(mod_encoding)
+                    metadata[idx].__dict__[namefield] = grid.GetCellValue(idx, 0).encode(mod_encoding, "replace")
                 
             # XXX song message too
             
