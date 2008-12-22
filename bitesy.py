@@ -7,6 +7,11 @@ wxPython app for IT file (en-masse) metadata editing
 
 (c) 2008 mike burke / mrb / mrburke@gmail.com
 
+todo:
+ - add checked commit progress indicator
+ - add copy + paste
+ - find the copy+paste buttons on the top panes (where did they go?!)
+ 
 """
 
 #
@@ -27,6 +32,18 @@ import traceback
 import pyIT
 
 mod_encoding = 'cp437'
+
+old_wx_message = """\
+It seems that you are using a version of wxWidgets
+that does not have wx.TextCtrl.ChangeValue.
+
+This means any file with a song message (and maybe
+even without) will be recorded as modified upon
+open, even if you don't change it.  Of course,
+nothing will be saved unless you actually "Commit".
+
+To fix this issue, upgrade to wx2.8 or something mmkay\
+"""
 
 # begin wxGlade: extracode
 # end wxGlade
@@ -430,6 +447,11 @@ class EditFrame(wx.Frame):
         
         self.change_dir(os.getcwd())
         self.updateDirChooser()
+        
+        try:
+            wx.TextCtrl.ChangeValue
+        except AttributeError:
+            wx.MessageDialog(self, old_wx_message, "wx < 2.7.1", style=wx.ICON_INFORMATION|wx.OK).ShowModal()
 
     def __set_properties(self):
         # begin wxGlade: EditFrame.__set_properties
@@ -613,6 +635,16 @@ class EditFrame(wx.Frame):
             
             i = 0
             for sample in itf.Samples:
+                if i == 99:
+                    wx.MessageDialog(self, 
+                        u"""\
+OK, so, the IT format allows >99 samples,
+but this program only supports 99.
+This particular file has more than that.
+I'll only load 99.  You won't lose the
+rest, but I won't let you edit them either.\
+""",
+                        u"Can't we just get along", style=wx.ICON_ERROR|wx.OK).ShowModal()
                 grid.SetCellValue(i, 0, sample.SampleName.decode(mod_encoding, "replace").rstrip(u' '))
                 i = i + 1
     
@@ -622,7 +654,15 @@ class EditFrame(wx.Frame):
             i = 0
             for instrument in itf.Instruments:
                 if i == 99:
-                    print "too many instruments :( i can only handle 100"
+                    wx.MessageDialog(self, 
+                        u"""\
+OK, so, the IT format allows >99 instruments,
+but this program only supports 99.
+This particular file has more than that.
+I'll only load 99.  You won't lose the
+rest, but you can't edit them either.\
+""",
+                        u"You're asking too much", style=wx.ICON_ERROR|wx.OK).ShowModal()
                     break
                 grid.SetCellValue(i, 0, instrument.InstName.decode(mod_encoding, "replace").rstrip(u' '))
                 i = i + 1
@@ -663,6 +703,7 @@ class EditFrame(wx.Frame):
     def onMessageCheckedChange(self, event):
         if not self.nbEdits.messagePane.editorChecked.IsModified():
             # workaround for wx pre-2.7.1 (deprecated SetValue method)
+            # xxx workaround doesn't work :(
             event.Skip()
         
         #print "checked message change"
@@ -671,6 +712,7 @@ class EditFrame(wx.Frame):
     def onMessageChange(self, event):
         if not self.nbEdits.messagePane.editorFile.IsModified():
             # workaround for wx pre-2.7.1 (deprecated SetValue method)
+            # xxx workaround doesn't work :(
             event.Skip()
         
         itf = self.opened['data']
@@ -728,72 +770,79 @@ class EditFrame(wx.Frame):
         
         commitlist = list(self.checked_files)
         for filespec in commitlist:
-            if filespec in self.modified_files:
-                print "can't commit", filespec, "as it has current modifications"
-                continue
-            
-            print "committing", filespec
-            itf = pyIT.ITfile()
-            itf.open(filespec)
-            
-            # song message
-            itf.Message = self.nbEdits.messagePane.editorChecked.GetValue()[:7999].encode(mod_encoding, "replace")
-
-            # load samples/instruments from grid and put into itf
-            fields = [
-                {'grid': self.nbEdits.samplePane.gridChecked,
-                 'metadata': itf.Samples,
-                 'namefield': 'SampleName',
-                 'blank': pyIT.ITsample}, 
-                {'grid': self.nbEdits.instrumentPane.gridChecked,
-                 'metadata': itf.Instruments,
-                 'namefield': 'InstName',
-                 'blank': pyIT.ITinstrument}
-                 ]
-            
-            for field in fields: 
-                grid = field['grid'] 
-                metadata = field['metadata']
-                namefield = field['namefield']
-                blank = field['blank']
+            try:
+                if filespec in self.modified_files:
+                    print "can't commit", filespec, "as it has current modifications"
+                    continue
                 
-                last_populated_idx = 0
+                #print "committing", filespec
+                itf = pyIT.ITfile()
+                itf.open(filespec)
                 
-                n = grid.GetNumberRows()
-                for idx in xrange(n):
-                    name = grid.GetCellValue(idx, 0)
-                    if name.rstrip():
-                        last_populated_idx = idx # trim empty entries from end
-                
-                # remove unused slots (only if sample)
-                try:
-                    last_sample_idx = last_populated_idx
-                    for idx in range(last_populated_idx+1, len(metadata)):
-                        if metadata[idx].IsSample:
-                            last_sample_idx = idx
-                    for idx in range(last_sample_idx+1, len(metadata)):
-                        metadata.pop()
-                except AttributeError:
-                    # no .IsSample, so we're looking at an instrument
-                    pass
-                
-                # clear all entries, add empty spaces for additional required lines
-                for line in metadata:
-                    #print "erasing", line.__dict__[namefield]
-                    line.__dict__[namefield] = ''
-                while last_populated_idx+1 > len(metadata): # add samples
-                    metadata.append(blank())
+                # song message
+                itf.Message = self.nbEdits.messagePane.editorChecked.GetValue()[:7999].encode(mod_encoding, "replace")
     
-                for idx in xrange(last_populated_idx+1):
-                    metadata[idx].__dict__[namefield] = grid.GetCellValue(idx, 0).encode(mod_encoding, "replace")
+                # load samples/instruments from grid and put into itf
+                fields = [
+                    {'grid': self.nbEdits.samplePane.gridChecked,
+                     'metadata': itf.Samples,
+                     'namefield': 'SampleName',
+                     'blank': pyIT.ITsample}, 
+                    {'grid': self.nbEdits.instrumentPane.gridChecked,
+                     'metadata': itf.Instruments,
+                     'namefield': 'InstName',
+                     'blank': pyIT.ITinstrument}
+                     ]
                 
-            # XXX song message too
+                for field in fields: 
+                    grid = field['grid'] 
+                    metadata = field['metadata']
+                    namefield = field['namefield']
+                    blank = field['blank']
+                    
+                    last_populated_idx = 0
+                    
+                    n = grid.GetNumberRows()
+                    for idx in xrange(n):
+                        name = grid.GetCellValue(idx, 0)
+                        if name.rstrip():
+                            last_populated_idx = idx # trim empty entries from end
+                    
+                    # remove unused slots (only if sample)
+                    try:
+                        last_sample_idx = last_populated_idx
+                        for idx in range(last_populated_idx+1, len(metadata)):
+                            if metadata[idx].IsSample:
+                                last_sample_idx = idx
+                        for idx in range(last_sample_idx+1, len(metadata)):
+                            metadata.pop()
+                    except AttributeError:
+                        # no .IsSample, so we're looking at an instrument
+                        pass
+                    
+                    # clear all entries, add empty spaces for additional required lines
+                    for line in metadata:
+                        #print "erasing", line.__dict__[namefield]
+                        line.__dict__[namefield] = ''
+                    while last_populated_idx+1 > len(metadata): # add samples
+                        metadata.append(blank())
+        
+                    for idx in xrange(last_populated_idx+1):
+                        metadata[idx].__dict__[namefield] = grid.GetCellValue(idx, 0).encode(mod_encoding, "replace")
+                itf.write(filespec)
+                
+                self.checked_files.remove(filespec)
             
-            itf.write(filespec)
-            
-            self.checked_files.remove(filespec)
-            
+            except:
+                # queue errors
+                pass
+                
         #self.checked_files = []
+        if self.checked_files:
+            msg = u"An error occurred processing the following files:\n\n"
+            for filespec in self.checked_files:
+                msg = msg + filespec + u'\n' 
+            wx.MessageDialog(self, msg, "Some great reward", style=wx.ICON_ERROR|wx.OK).ShowModal()
         
         self.loadDir()
         event.Skip()
