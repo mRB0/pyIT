@@ -1007,12 +1007,25 @@ rest, but you can't edit them either.\
         if not self.opened:
             return
         filespec = self.opened['filespec']
+        statresult = os.stat(filespec)
+
         if filespec in self.modified_files:
             del self.modified_files[filespec]
         else:
             print "warning:", filespec, 'not modified; committing anyway'
         
+        if self.nbEdits.samplePane.cbStrftime.GetValue():
+            mtime = time.localtime(statresult.st_mtime)
+            for sample in self.opened['data'].Samples:
+                sample.SampleName = time.strftime(sample.SampleName, mtime)
+            for inst in self.opened['data'].Instruments:
+                inst.InstName = time.strftime(inst.InstName, mtime)
+            self.opened['data'].Message = time.strftime(self.opened['data'].Message, mtime)
+        
         self.opened['data'].write(filespec)
+        
+        if preserve_file_date:
+            os.utime(filespec, (statresult.st_atime, statresult.st_mtime))
         
         # reopen file
         self.open_it(filespec)
