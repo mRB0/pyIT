@@ -768,6 +768,8 @@ rest, but you can't edit them either.\
     def onCommitChecked(self, event):
         # load each checked file and... 
         
+        errors = u''
+        
         commitlist = list(self.checked_files)
         for filespec in commitlist:
             try:
@@ -835,14 +837,22 @@ rest, but you can't edit them either.\
             
             except:
                 # queue errors
-                pass
+                errors = errors + u'[' + filespec + u']\n' + traceback.format_exc() + u'\n' 
                 
         #self.checked_files = []
         if self.checked_files:
             msg = u"An error occurred processing the following files:\n\n"
             for filespec in self.checked_files:
-                msg = msg + filespec + u'\n' 
-            wx.MessageDialog(self, msg, "Some great reward", style=wx.ICON_ERROR|wx.OK).ShowModal()
+                msg = msg + filespec + u'\n'
+            if errors: 
+                msg = msg + u"\nFeel like saving a stack trace?"
+                mdlg = wx.MessageDialog(self, msg, "Some great reward", style=wx.ICON_ERROR|wx.YES_NO)
+                if wx.ID_YES == mdlg.ShowModal():
+                    fdlg = wx.FileDialog(self, "Save a stack trace to...", defaultFile="bitesy_stack.txt", wildcard="Text files (*.txt)|*.txt", style=wx.FD_SAVE)
+                    if wx.ID_OK == fdlg.ShowModal():
+                        f = file(fdlg.GetPath(), "w")
+                        f.write(errors)
+                    
         
         self.loadDir()
         event.Skip()

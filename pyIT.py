@@ -17,6 +17,10 @@ creates an IT with the basic structure:
   instruments
   sample data
 
+todo:
+ - find out why mario2.it won't load (for some instrument, "IMPI" != "IMPI")
+ - add some compatibility-making code: fix envelopes that have no points, etc.
+ - create some exceptions to replace assertion errors
 """
 
 import sys
@@ -163,7 +167,10 @@ class ITinstrument:
     (zero, self.NNA, self.DCT, self.DCA, self.FadeOut, self.PPS, self.PPC, 
      self.GbV, self.DfP, self.RV, self.RP, discard, discard,
      discard) = struct.unpack('<BBBBHBBBBBBHBB', inf.read(16))
-    assert(zero == 0x0)
+    
+    # seems some mods (saved by a bad schismtracker, maybe?)
+    # don't have zero = 0x0
+    #assert(zero == 0x0)
     
     self.InstName = inf.read(26).replace('\0', ' ')[:25]
     
@@ -260,7 +267,9 @@ class ITsample:
     assert(IMPS == 'IMPS')
     
     (zero, self.GvL, flags, self.Vol) = struct.unpack('<BBBB', inf.read(4))
-    assert(zero == 0x0)
+    # seems some mods (saved by a bad schismtracker, maybe?)
+    # don't have zero = 0x0
+    #assert(zero == 0x0)
     
     self.IsSample = bool(flags & 0x01)
     self.Is16bit = bool(flags & 0x02)
@@ -431,7 +440,11 @@ class ITfile:
       inf.seek(offs_inst)
       
       inst = ITinstrument()
-      inst.load(inf)
+      try:
+        inst.load(inf)
+      except:
+        # the instrument failed to load, but we'll pretend it didn't
+        pass
       self.Instruments.append(inst)
     
     self.Samples = []
@@ -440,7 +453,13 @@ class ITfile:
       inf.seek(offs_samp)
       
       samp = ITsample()
-      samp.load(inf)
+      try:
+        samp.load(inf)
+      except:
+        # the sample failed to load, but we'll pretend it didn't
+        # we might need to do some cleanup...
+        
+        pass
       self.Samples.append(samp)
     
     inf.close()
