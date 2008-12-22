@@ -9,8 +9,6 @@ wxPython app for IT file (en-masse) metadata editing
 
 todo:
  - add checked commit progress indicator
- - add copy + paste
- - find the copy+paste buttons on the top panes (where did they go?!)
  
 """
 
@@ -109,7 +107,7 @@ class ListEditorPane(wx.Panel):
  
         self.lblFilename = wx.StaticText(self.topPane, -1, "File:")
         self.txtFilename = wx.TextCtrl(self.topPane, -1, "", style=wx.TE_READONLY|wx.NO_BORDER)
-        self.gridFile = CommentGrid(self.topPane, -1)#, size=(1, 1))
+        self.gridFile = CommentGrid(self.topPane, -1, size=(1, 1))
         
         
         self.btnCommitFile = wx.Button(self.topPane, -1, "Commit")
@@ -126,6 +124,12 @@ class ListEditorPane(wx.Panel):
 
         self.__set_properties()
         self.__do_layout()
+        
+        self.Bind(wx.EVT_BUTTON, self.onCopyFile, self.btnCopyFile)
+        self.Bind(wx.EVT_BUTTON, self.onPasteFile, self.btnPasteFile)
+        self.Bind(wx.EVT_BUTTON, self.onCopyChecked, self.btnCopyChecked)
+        self.Bind(wx.EVT_BUTTON, self.onPasteChecked, self.btnPasteChecked)
+        
     
     def __set_properties(self):
         self.txtFilename.SetBackgroundColour(wx.SystemSettings.GetColour(wx.SYS_COLOUR_3DFACE))
@@ -203,6 +207,64 @@ class ListEditorPane(wx.Panel):
         #self.Layout()
         #print self.GetSize()
         self.splitter.SetSashPosition(200)#self.GetSize()[0] / 2)
+    
+    def onCopyFile(self, event):
+        self.do_copy(self.gridFile)
+    
+    def onCopyChecked(self, event):
+        self.do_copy(self.gridChecked)
+    
+    def do_copy(self, grid):
+        rows = []
+        
+        sel_top_lefts = grid.GetSelectionBlockTopLeft()
+        sel_btm_rights = grid.GetSelectionBlockBottomRight()
+         
+        for i in range(len(sel_top_lefts)):
+            for idx in range(sel_top_lefts[i][0],
+                             sel_btm_rights[i][0]+1):
+                rows.append(grid.GetCellValue(idx, 0))
+        
+        clip = wx.TheClipboard
+        if not clip.Open():
+            return
+        do = wx.TextDataObject()
+        do.SetText(u'\r\n'.join(rows))
+        clip.SetData(do)
+        clip.Close()
+
+    def onPasteFile(self, event):
+        self.do_paste(self.gridFile)
+
+    def onPasteChecked(self, event):
+        self.do_paste(self.gridChecked)
+        
+    def do_paste(self, grid):
+        clip = wx.TheClipboard
+        if not clip.Open():
+            return
+        do = wx.TextDataObject()
+        rc = clip.GetData(do)
+        clip.Close()
+        #print do.GetText()
+        
+        idx = grid.GetGridCursorRow()
+        
+        cliptext = do.GetText()
+        
+        cliptext = cliptext.replace(u"\r\n", u"\n")
+        cliptext = cliptext.replace(u"\r", u"\n")
+        
+        for line in cliptext.rstrip(u'\n').split(u'\n'):
+            if idx >= 99:
+                break
+            grid.SetCellValue(idx, 0, line.rstrip())
+            # post cell-change event
+            evt = wx.grid.GridEvent(grid.GetId(), wx.grid.wxEVT_GRID_CELL_CHANGE, grid, idx, grid.GetGridCursorCol())
+            grid.GetEventHandler().ProcessEvent(evt)
+            
+            idx = idx + 1
+            
  
 class MessageEditorPane(wx.Panel):
     def __init__(self, *args, **kwds):
@@ -220,18 +282,20 @@ class MessageEditorPane(wx.Panel):
         
         self.btnCommitFile = wx.Button(self.topPane, -1, "Commit")
         self.btnRevertFile = wx.Button(self.topPane, -1, "Revert")
-        self.btnCopyFile = wx.Button(self.topPane, -1, "Copy")
-        self.btnPasteFile = wx.Button(self.topPane, -1, "Paste")
+        #self.btnCopyFile = wx.Button(self.topPane, -1, "Copy")
+        #self.btnPasteFile = wx.Button(self.topPane, -1, "Paste")
         
         self.lblChecked = wx.StaticText(self.bottomPane, -1, "Checkmarked files")
         self.editorChecked = wx.TextCtrl(self.bottomPane, -1, u'', style=wx.TE_MULTILINE)
         self.btnCommitChecked = wx.Button(self.bottomPane, -1, "Commit")
         self.btnRevertChecked = wx.Button(self.bottomPane, -1, "Revert")
-        self.btnCopyChecked = wx.Button(self.bottomPane, -1, "Copy")
-        self.btnPasteChecked = wx.Button(self.bottomPane, -1, "Paste")
-
+        #self.btnCopyChecked = wx.Button(self.bottomPane, -1, "Copy")
+        #self.btnPasteChecked = wx.Button(self.bottomPane, -1, "Paste")
+        
         self.__set_properties()
         self.__do_layout()
+        
+        
     
     def __set_properties(self):
         self.txtFilename.SetBackgroundColour(wx.SystemSettings.GetColour(wx.SYS_COLOUR_3DFACE))
@@ -243,8 +307,8 @@ class MessageEditorPane(wx.Panel):
         # top half (edit file)
         
         szrFilenameGrid = wx.BoxSizer(wx.VERTICAL)
-        szrTopGrid = wx.FlexGridSizer(2, 2, 4, 4)
-        szrCopyPaste = wx.BoxSizer(wx.HORIZONTAL)
+        szrTopGrid = wx.FlexGridSizer(1, 2, 4, 4)
+        #szrCopyPaste = wx.BoxSizer(wx.HORIZONTAL)
         szrCommitRevert = wx.BoxSizer(wx.VERTICAL)
         szrFilenameLabel = wx.BoxSizer(wx.HORIZONTAL)
         szrFilenameLabel.Add(self.lblFilename, 0, wx.ALL, 4)
@@ -254,10 +318,10 @@ class MessageEditorPane(wx.Panel):
         szrCommitRevert.Add(self.btnCommitFile, 0, wx.ALL, 2)
         szrCommitRevert.Add(self.btnRevertFile, 0, wx.ALL, 2)
         szrTopGrid.Add(szrCommitRevert, 0, wx.ALIGN_CENTER_VERTICAL, 0)
-        szrCopyPaste.Add(self.btnCopyFile, 0, wx.ALL, 2)
-        szrCopyPaste.Add(self.btnPasteFile, 0, wx.ALL, 2)
-        szrTopGrid.Add(szrCopyPaste, 1, wx.ALIGN_CENTER_HORIZONTAL, 0)
-        szrTopGrid.Add((0, 0), 0, 0, 0)
+        #szrCopyPaste.Add(self.btnCopyFile, 0, wx.ALL, 2)
+        #szrCopyPaste.Add(self.btnPasteFile, 0, wx.ALL, 2)
+        #szrTopGrid.Add(szrCopyPaste, 1, wx.ALIGN_CENTER_HORIZONTAL, 0)
+        #szrTopGrid.Add((0, 0), 0, 0, 0)
         szrFilenameGrid.Add(szrTopGrid, 1, wx.EXPAND, 0)
         self.topPane.SetSizer(szrFilenameGrid)
         
@@ -266,13 +330,13 @@ class MessageEditorPane(wx.Panel):
 
         # bottom half (edit checked)
         
-        szrBottomGrid = wx.FlexGridSizer(3, 2, 4, 4)
+        szrBottomGrid = wx.FlexGridSizer(2, 2, 4, 4)
         szrBottomGrid.Add(self.lblChecked, 0, wx.ALL, 4)
         szrBottomGrid.Add((0, 0), 0, 0, 0)
         
         szrBottomGrid.Add(self.editorChecked, 1, wx.EXPAND, 0)
         
-        szrCopyPaste = wx.BoxSizer(wx.HORIZONTAL)
+        #szrCopyPaste = wx.BoxSizer(wx.HORIZONTAL)
         szrCommitRevert = wx.BoxSizer(wx.VERTICAL)
         
         szrCommitRevert.Add(self.btnCommitChecked, 0, wx.ALL, 2)
@@ -280,12 +344,12 @@ class MessageEditorPane(wx.Panel):
         
         szrBottomGrid.Add(szrCommitRevert, 0, wx.ALIGN_CENTER_VERTICAL, 0)
         
-        szrCopyPaste.Add(self.btnCopyChecked, 0, wx.ALL, 2)
-        szrCopyPaste.Add(self.btnPasteChecked, 0, wx.ALL, 2)
+        #szrCopyPaste.Add(self.btnCopyChecked, 0, wx.ALL, 2)
+        #szrCopyPaste.Add(self.btnPasteChecked, 0, wx.ALL, 2)
         
-        szrBottomGrid.Add(szrCopyPaste, 1, wx.ALIGN_CENTER_HORIZONTAL, 0)
+        #szrBottomGrid.Add(szrCopyPaste, 1, wx.ALIGN_CENTER_HORIZONTAL, 0)
         
-        szrBottomGrid.Add((0, 0), 0, 0, 0)
+        #szrBottomGrid.Add((0, 0), 0, 0, 0)
         
         #szrFilenameGrid.Add(szrBottomGrid, 1, wx.EXPAND, 0)
         self.bottomPane.SetSizer(szrBottomGrid)
