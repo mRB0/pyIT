@@ -8,7 +8,7 @@ wxPython app for IT file (en-masse) metadata editing
 (c) 2008 mike burke / mrb / mrburke@gmail.com
 
 todo:
- - add checked commit progress indicator
+ - nothing ?! 
  
 """
 
@@ -21,6 +21,7 @@ from __future__ import division
 
 import os, os.path
 import random
+import time
  
 import wx
 import wx.grid
@@ -29,7 +30,21 @@ import traceback
 
 import pyIT
 
+#####################################################
+# SETTINGS
+
+# character encoding used in mods
 mod_encoding = 'cp437'
+
+# preserve file atime and mtime?
+preserve_file_date = True
+
+# perform strftime substitution on written metadata
+# (by default)
+do_strftime = False
+
+# END SETTINGS
+#####################################################
 
 old_wx_message = """\
 It seems that you are using a version of wxWidgets
@@ -118,7 +133,9 @@ class ListEditorPane(wx.Panel):
         self.lblChecked = wx.StaticText(self.bottomPane, -1, "Checkmarked files")
         self.gridChecked = CommentGrid(self.bottomPane, -1, size=(1, 1))
         self.btnCommitChecked = wx.Button(self.bottomPane, -1, "Commit")
-        self.btnRevertChecked = wx.Button(self.bottomPane, -1, "Revert")
+        self.cbStrftime = wx.CheckBox(self.bottomPane, -1, "Do strftime")
+        
+        #self.btnRevertChecked = wx.Button(self.bottomPane, -1, "Revert")
         self.btnCopyChecked = wx.Button(self.bottomPane, -1, "Copy")
         self.btnPasteChecked = wx.Button(self.bottomPane, -1, "Paste")
 
@@ -129,7 +146,6 @@ class ListEditorPane(wx.Panel):
         self.Bind(wx.EVT_BUTTON, self.onPasteFile, self.btnPasteFile)
         self.Bind(wx.EVT_BUTTON, self.onCopyChecked, self.btnCopyChecked)
         self.Bind(wx.EVT_BUTTON, self.onPasteChecked, self.btnPasteChecked)
-        
     
     def __set_properties(self):
         self.txtFilename.SetBackgroundColour(wx.SystemSettings.GetColour(wx.SYS_COLOUR_3DFACE))
@@ -174,7 +190,7 @@ class ListEditorPane(wx.Panel):
         szrCommitRevert = wx.BoxSizer(wx.VERTICAL)
         
         szrCommitRevert.Add(self.btnCommitChecked, 0, wx.ALL, 2)
-        szrCommitRevert.Add(self.btnRevertChecked, 0, wx.ALL, 2)
+        szrCommitRevert.Add(self.cbStrftime, 0, wx.ALL, 2)
         
         szrBottomGrid.Add(szrCommitRevert, 0, wx.ALIGN_CENTER_VERTICAL, 0)
         
@@ -288,7 +304,8 @@ class MessageEditorPane(wx.Panel):
         self.lblChecked = wx.StaticText(self.bottomPane, -1, "Checkmarked files")
         self.editorChecked = wx.TextCtrl(self.bottomPane, -1, u'', style=wx.TE_MULTILINE)
         self.btnCommitChecked = wx.Button(self.bottomPane, -1, "Commit")
-        self.btnRevertChecked = wx.Button(self.bottomPane, -1, "Revert")
+        self.cbStrftime = wx.CheckBox(self.bottomPane, -1, "Do strftime")
+        #self.btnRevertChecked = wx.Button(self.bottomPane, -1, "Revert")
         #self.btnCopyChecked = wx.Button(self.bottomPane, -1, "Copy")
         #self.btnPasteChecked = wx.Button(self.bottomPane, -1, "Paste")
         
@@ -340,7 +357,7 @@ class MessageEditorPane(wx.Panel):
         szrCommitRevert = wx.BoxSizer(wx.VERTICAL)
         
         szrCommitRevert.Add(self.btnCommitChecked, 0, wx.ALL, 2)
-        szrCommitRevert.Add(self.btnRevertChecked, 0, wx.ALL, 2)
+        szrCommitRevert.Add(self.cbStrftime, 0, wx.ALL, 2)
         
         szrBottomGrid.Add(szrCommitRevert, 0, wx.ALIGN_CENTER_VERTICAL, 0)
         
@@ -503,11 +520,15 @@ class EditFrame(wx.Frame):
         self.Bind(wx.EVT_BUTTON, self.onRevertFile, self.nbEdits.messagePane.btnRevertFile)
         
         self.Bind(wx.EVT_BUTTON, self.onCommitChecked, self.nbEdits.samplePane.btnCommitChecked)
-        self.Bind(wx.EVT_BUTTON, self.onRevertChecked, self.nbEdits.samplePane.btnRevertChecked)
+        #self.Bind(wx.EVT_BUTTON, self.onRevertChecked, self.nbEdits.samplePane.btnRevertChecked)
         self.Bind(wx.EVT_BUTTON, self.onCommitChecked, self.nbEdits.instrumentPane.btnCommitChecked)
-        self.Bind(wx.EVT_BUTTON, self.onRevertChecked, self.nbEdits.instrumentPane.btnRevertChecked)
+        #self.Bind(wx.EVT_BUTTON, self.onRevertChecked, self.nbEdits.instrumentPane.btnRevertChecked)
         self.Bind(wx.EVT_BUTTON, self.onCommitChecked, self.nbEdits.messagePane.btnCommitChecked)
-        self.Bind(wx.EVT_BUTTON, self.onRevertChecked, self.nbEdits.messagePane.btnRevertChecked)
+        #self.Bind(wx.EVT_BUTTON, self.onRevertChecked, self.nbEdits.messagePane.btnRevertChecked)
+        
+        self.Bind(wx.EVT_CHECKBOX, self.onCbStrftime, self.nbEdits.samplePane.cbStrftime)
+        self.Bind(wx.EVT_CHECKBOX, self.onCbStrftime, self.nbEdits.instrumentPane.cbStrftime)
+        self.Bind(wx.EVT_CHECKBOX, self.onCbStrftime, self.nbEdits.messagePane.cbStrftime)
         
         self.change_dir(os.getcwd())
         self.updateDirChooser()
@@ -550,6 +571,11 @@ class EditFrame(wx.Frame):
         self.nbEdits.messagePane.splitter.SetSashPosition(self.nbEdits.GetSize()[1]/2)
         self.nbEdits.oldSize = self.nbEdits.GetSize()
         #print self.nbEdits.sampleSplitter.GetSashPosition()
+        
+        self.nbEdits.samplePane.cbStrftime.SetValue(do_strftime)
+        self.nbEdits.instrumentPane.cbStrftime.SetValue(do_strftime)
+        self.nbEdits.messagePane.cbStrftime.SetValue(do_strftime)
+        
     
     def change_dir(self, new_dir):
         new_dir = os.path.join(new_dir, u'')
@@ -563,6 +589,12 @@ class EditFrame(wx.Frame):
         
         self.updateDirChooser()
     
+    def onCbStrftime(self, event):
+        is_checked = event.GetInt()
+        self.nbEdits.samplePane.cbStrftime.SetValue(is_checked)
+        self.nbEdits.instrumentPane.cbStrftime.SetValue(is_checked)
+        self.nbEdits.messagePane.cbStrftime.SetValue(is_checked)
+        
     def onDirChoose(self, event):
         new_idx = self.chDirChooser.GetSelection()
         #print "Selected", new_idx
@@ -830,18 +862,36 @@ rest, but you can't edit them either.\
         event.Skip()
     
     def onCommitChecked(self, event):
+        self.commit_checked()
+        event.Skip()
+    
+    def commit_checked(self):
         # load each checked file and... 
+        if not self.checked_files:
+            return
         
         errors = u''
         
         commitlist = list(self.checked_files)
+        checked_and_modified = []
+        
+        progress_val = 0
+        
+        pdlg = wx.ProgressDialog("Committing", commitlist[0], len(commitlist),
+                                 style=wx.PD_ELAPSED_TIME|wx.PD_ESTIMATED_TIME|wx.PD_REMAINING_TIME|wx.PD_SMOOTH)  
+        
         for filespec in commitlist:
+            pdlg.Update(progress_val, filespec)
+            progress_val = progress_val + 1
+            
             try:
                 if filespec in self.modified_files:
-                    print "can't commit", filespec, "as it has current modifications"
+                    checked_and_modified.append(filespec)
                     continue
                 
                 #print "committing", filespec
+                statresult = os.stat(filespec)
+
                 itf = pyIT.ITfile()
                 itf.open(filespec)
                 
@@ -895,7 +945,23 @@ rest, but you can't edit them either.\
         
                     for idx in xrange(last_populated_idx+1):
                         metadata[idx].__dict__[namefield] = grid.GetCellValue(idx, 0).encode(mod_encoding, "replace")
+                
+                
+                # perform strftime substitution
+                if self.nbEdits.samplePane.cbStrftime.GetValue():
+                    mtime = time.localtime(statresult.st_mtime)
+                    for sample in itf.Samples:
+                        sample.SampleName = time.strftime(sample.SampleName, mtime)
+                    for inst in itf.Instruments:
+                        inst.InstName = time.strftime(inst.InstName, mtime)
+                    itf.Message = time.strftime(itf.Message, mtime)
+
+                # commit data
+                
                 itf.write(filespec)
+                
+                if preserve_file_date:
+                    os.utime(filespec, (statresult.st_atime, statresult.st_mtime))
                 
                 self.checked_files.remove(filespec)
             
@@ -903,13 +969,24 @@ rest, but you can't edit them either.\
                 # queue errors
                 errors = errors + u'[' + filespec + u']\n' + traceback.format_exc() + u'\n' 
                 
+        pdlg.Destroy()
+        
+        if checked_and_modified:
+            msg =       u'Cowardly refusing to commit changes for\n'
+            msg = msg + u'some file(s), as it (they?!) have been\n'
+            msg = msg + u'modified but not saved:\n\n'
+            msg = msg + u'\n'.join(checked_and_modified)
+            wx.MessageDialog(self, msg, u"Very juicy for an Amiga!",
+                             style=wx.ICON_EXCLAMATION|wx.OK).ShowModal()
+        
         #self.checked_files = []
         if self.checked_files:
             msg = u"An error occurred processing the following files:\n\n"
-            for filespec in self.checked_files:
-                msg = msg + filespec + u'\n'
+            msg = msg + u'\n'.join(self.checked_files[:5])
+            if len(self.checked_files) > 5:
+                msg = msg + u"\n...and %d more file(s)\n" % (len(self.checked_files)-5,) 
             if errors: 
-                msg = msg + u"\nFeel like saving a stack trace?"
+                msg = msg + u"\n\nFeel like saving a stack trace?"
                 mdlg = wx.MessageDialog(self, msg, "Some great reward", style=wx.ICON_ERROR|wx.YES_NO)
                 if wx.ID_YES == mdlg.ShowModal():
                     fdlg = wx.FileDialog(self, "Save a stack trace to...", defaultFile="bitesy_stack.txt", wildcard="Text files (*.txt)|*.txt", style=wx.FD_SAVE)
@@ -919,11 +996,10 @@ rest, but you can't edit them either.\
                     
         
         self.loadDir()
-        event.Skip()
     
-    def onRevertChecked(self, event):
-        print "no revert no"
-        event.Skip()
+    #def onRevertChecked(self, event):
+    #    print "no revert no"
+    #    event.Skip()
     
     def onCommitFile(self, event):
         if not self.opened:
