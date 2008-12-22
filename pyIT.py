@@ -4,7 +4,7 @@
 
 Python module for handling Impulse Tracker files.
 
-(c) 2008 mike burke / mrb
+(c) 2008 mike burke / mrb / mrburke@gmail.com
 
 doesn't and won't handle old format IT instruments (cmwt < 0x200),
 but I don't think these even exist in the wild.
