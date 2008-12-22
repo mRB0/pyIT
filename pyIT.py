@@ -312,6 +312,9 @@ class ITpattern:
   def __len__(self):
     return len(self.ptnData) + 8
   
+  def __eq__(self, other):
+    return self.rows == other.rows and self.ptnData == other.ptnData
+    
   def write(self, outf):
     outf.write(struct.pack('<HH4s', len(self.ptnData), self.rows, '\0'*4))
     outf.write(self.ptnData)
@@ -479,7 +482,24 @@ class ITfile:
     ptnoffs_offs = sampoffs_offs + len(self.Samples)*4
     msg_offs = ptnoffs_offs + len(self.Ptns)*4
     ptn_offs = msg_offs + len(message)
-    samp_offs = ptn_offs + sum([len(x) for x in self.Ptns])
+    
+    # pack patterns so we can predict total pattern data length, and
+    # next offset
+    (pattern_list, unique_ITpatterns) = self.pack_ptns()
+    ptn_offsets = {} 
+    offs = ptn_offs
+    for x in pattern_list:
+      if x not in ptn_offsets:
+        # unknown pattern
+        
+        # store new pattern offset
+        ptn_offsets[x] = offs
+        
+        offs = offs + len(unique_ITpatterns[x])
+    
+    
+    #samp_offs = ptn_offs + sum([len(x) for x in self.Ptns])
+    samp_offs = offs
     inst_offs = samp_offs + sum([len(x) for x in self.Samples])
     sampledata_offs = inst_offs + sum([len(x) for x in self.Instruments])
     
@@ -534,17 +554,17 @@ class ITfile:
     
     assert(outf.tell() == ptnoffs_offs)
     
-    offs = ptn_offs
-    for x in self.Ptns:
-      outf.write(struct.pack('<I', offs))
-      offs = offs + len(x)
+    # save patterns (packed)
+    for x in pattern_list:
+      print x
+      outf.write(struct.pack('<I', ptn_offsets[x]))
     
     assert(outf.tell() == msg_offs)
     if message:
       outf.write(message)
     assert(outf.tell() == ptn_offs)
     
-    for ptn in self.Ptns:
+    for ptn in unique_ITpatterns:
       ptn.write(outf)
     assert(outf.tell() == samp_offs)
     
@@ -570,6 +590,22 @@ class ITfile:
         
     outf.close()
     
+  def pack_ptns(self):
+    """Returns a tuple(pattern_list, unique_ITpatterns)""" 
+    ptnlist = []
+    ptns = []
+    
+    for ptn in self.Ptns:
+      if ptn in ptns:
+        # already in pattern set, create a reference only
+        ptnlist.append(ptns.index(ptn))
+      else:
+        # doesn't exist in pattern set, add it and create a reference to it
+        ptns.append(ptn)
+        ptnlist.append(ptns.index(ptn))
+    
+    return (ptnlist, ptns) 
+
 def process():
   itf = ITfile()
   
@@ -577,8 +613,8 @@ def process():
   
   itf.open(sys.argv[1])
   
-  for samp in itf.Samples:
-    print samp.SampleName.decode('cp437')
+  #for samp in itf.Samples:
+  #  print samp.SampleName.decode('cp437')
   
   itf.write('new.it')
   
