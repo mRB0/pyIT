@@ -26,6 +26,11 @@ todo:
 
 import sys
 import struct
+from cStringIO import StringIO
+import traceback
+
+import pyitcompress
+
 
 class ITenvelope_node:
   def __init__(self):
@@ -283,6 +288,8 @@ class ITsample:
     
     self.SampleName = inf.read(26).replace('\0', ' ')[:25]
     
+    sys.stderr.write("\n=> Loading sample %s\n" % (self.SampleName,))
+    
     (self.Cvt, self.DfP) = struct.unpack('<BB', inf.read(2))
     
     (length, self.LoopBegin, self.LoopEnd, self.C5Speed) = struct.unpack('<IIII', inf.read(16))
@@ -298,9 +305,41 @@ class ITsample:
       if self.IsStereo:
         mult = mult * 2
       
-      length = length * mult
-      inf.seek(offs_sampledata)
-      self.SampleData = inf.read(length)
+      sys.stderr.write("   length in samples is %d\n" % (length,))
+      if self.IsCompressed:
+        sys.stderr.write("   compressed\n")
+        # set up stringio buffer(s)
+        decompressedbuf = StringIO()
+        
+        if self.Is16bit:
+          inf.seek(offs_sampledata)
+          sys.stderr.write("   16-bit compressed sample at %d\n" % (offs_sampledata,))
+          
+          try:
+            pyitcompress.it_decompress16(decompressedbuf, length, inf, True)
+            #sys.stderr.write("   decompressed length: %d\n" % (len(decompressedbuf.getvalue()),))
+            self.SampleData = decompressedbuf.getvalue()
+            self.IsCompressed = False
+          except:
+            print
+            traceback.print_exc()
+        else:
+          inf.seek(offs_sampledata)
+          sys.stderr.write("   8-bit compressed sample at %d\n" % (offs_sampledata,))
+          
+          try:
+            pyitcompress.it_decompress8(decompressedbuf, length, inf, True)
+            #sys.stderr.write("   decompressed length: %d\n" % (len(decompressedbuf.getvalue()),))
+            self.SampleData = decompressedbuf.getvalue()
+            self.IsCompressed = False
+          except:
+            print
+            traceback.print_exc()
+      else:
+        length = length * mult
+        sys.stderr.write("   length in bytes is %s\n" % (length,))
+        inf.seek(offs_sampledata)
+        self.SampleData = inf.read(length)
       
   def __len__(self):
     return 80
