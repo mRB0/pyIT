@@ -27,24 +27,34 @@
 # ------------------------------------------------------------------------------------------------------------
 # IT decompression code from itsex.c (Cubic Player) and load_it.cpp (Modplug)
 # (I suppose this could be considered a merge between the two.)
+import struct
 
 class ReadBitsState:
-    def __init__(self):
-        self.bitbuf = 0
-        self.bitnum = 0
+        def __init__(self):
+                self.bitbuf = 0
+                self.bitnum = 0
+
+def MIN(a, b):
+        if a < b:
+                return a
+        else:
+                return b
 
 def it_readbits(n, state, stream):
         value = 0
         i = n
         
+        #print "[it_readbits: bitnum=%d, bitbuf=%d, n=%d]" % (state.bitnum, state.bitbuf, n)
+        
         # this could be better
         while i:
                 i -= 1
-                if not bitnum:
-                        state.bitbuf = stream.read()
+                if not state.bitnum:
+                        state.bitbuf = struct.unpack('@B', stream.read(1))[0]
                         state.bitnum = 8
                 value >>= 1
-                value |= state.bitbuf << 31
+                #print "[it_readbits: state.bitbuf = 0x%x, state.bitbuf<<31 = 0x%x]" % (state.bitbuf, state.bitbuf<<31)
+                value |= (state.bitbuf << 31) & 0xffffffff
                 state.bitbuf >>= 1
                 state.bitnum -= 1
 
@@ -72,6 +82,8 @@ it215: (bool) use it215 algorithm
 #        filebuf = srcbuf = (const uint8_t *) file
 #        destpos = (int8_t *) dest
         
+        #print
+        
         # now unpack data till the dest buffer is full
         while (len):
                 # read a new block of compressed data and reset variables
@@ -81,7 +93,7 @@ it215: (bool) use it215 algorithm
                 if not srcbuf.read(2):
                     return
                     
-                bitbuf = bitnum = 0
+                state.bitbuf = state.bitnum = 0
                 
                 blklen = MIN(0x8000, len)
                 blkpos = 0
@@ -91,10 +103,13 @@ it215: (bool) use it215 algorithm
                 
                 # now uncompress the data block
                 while (blkpos < blklen):
+                        #print "[it_decompress8: while2: blkpos = %d, blklen = %d]" % (blkpos, blklen)
+                        
                         value = it_readbits(width, state, srcbuf)
                         
                         if (width < 7):
                                 # method 1 (1-6 bits)
+                                #print "[it_decompress8: method 1]"
                                 # check for "100..."
                                 if (value == 1 << (width - 1)):
                                         # yes!
@@ -103,6 +118,7 @@ it215: (bool) use it215 algorithm
                                         continue # ... next value
                         elif (width < 9):
                                 # method 2 (7-8 bits)
+                                #print "[it_decompress8: method 2]"
                                 border = (0xFF >> (9 - width)) - 4 # lower border for width chg
                                 if (value > border and value <= (border + 8)):
                                         value -= border # convert width to 1-8
@@ -111,6 +127,7 @@ it215: (bool) use it215 algorithm
                         elif (width == 9):
                                 # method 3 (9 bits)
                                 # bit 8 set?
+                                #print "[it_decompress8: method 3: width=0x%x, value=0x%x]" % (width, value)
                                 if (value & 0x100):
                                         width = (value + 1) & 0xff # new width...
                                         continue # ... and next value
@@ -122,17 +139,17 @@ it215: (bool) use it215 algorithm
                         # now expand value to signed byte
                         if (width < 8):
                                 shift = 8 - width
-                                v = (value << shift)
+                                v = (value << shift) & 0xff
                                 v >>= shift
                         else:
                                 v = value
                         
                         # integrate upon the sample values
-                        d1 += v
-                        d2 += d1
+                        d1 = (d1 + v) & 0xff
+                        d2 = (d2 + d1) & 0xff
                         
                         # .. and store it into the buffer
-                        dest.write([d2 if it215 else d1])
+                        dest.write(chr(d2) if it215 else chr(d1))
                         blkpos += 1
 
                 # now subtract block length from total length and go on
@@ -168,7 +185,7 @@ it215: (bool) use it215 algorithm
                 if not srcbuf.read(2):
                 	return
 
-                bitbuf = bitnum = 0
+                state.bitbuf = state.bitnum = 0
 
                 blklen = MIN(0x4000, len)
                 blkpos = 0
@@ -209,18 +226,19 @@ it215: (bool) use it215 algorithm
                         # now expand value to signed byte
                         if (width < 16):
                                 shift = 16 - width
-                                v = (value << shift)
+                                v = (value << shift) & 0xffff
                                 v >>= shift
                         else:
                                 v = value
                         
                         # integrate upon the sample values
-                        d1 += v
-                        d2 += d1
+                        d1 = (d1 + v) & 0xffff
+                        d2 = (d2 + d1) & 0xffff
                         
                         # .. and store it into the buffer
                         outval = d2 if it215 else d1
-                        dest.write([outval & 0xFF, outval >> 8])
+                        dest.write(chr(outval & 0xFF))
+                        dest.write(chr(outval >> 8))
                         blkpos += 1
 
                 # now subtract block length from total length and go on
