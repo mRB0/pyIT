@@ -28,6 +28,7 @@
 # IT decompression code from itsex.c (Cubic Player) and load_it.cpp (Modplug)
 # (I suppose this could be considered a merge between the two.)
 import struct
+import sys
 
 class ReadBitsState:
         def __init__(self):
@@ -61,6 +62,21 @@ def it_readbits(n, state, stream):
         return value >> (32 - n)
 
 
+def signbyte(b):
+    #sys.stderr.write("[signbyte: converting %d]\n" % (b,))
+    return struct.unpack('b', struct.pack('B', b))[0]
+
+def unsignbyte(b):
+    #sys.stderr.write("[unsignbyte: converting %d]\n" % (b,))
+    return struct.unpack('B', struct.pack('b', b))[0]
+
+def signword(w):
+    #sys.stderr.write("[signbyte: converting %d]\n" % (b,))
+    return struct.unpack('h', struct.pack('H', w))[0]
+
+def unsignword(w):
+    #sys.stderr.write("[unsignbyte: converting %d]\n" % (b,))
+    return struct.unpack('H', struct.pack('h', w))[0]
 
 def it_decompress8(dest, len, srcbuf, it215):
         """dest: (file-like object) output buffer
@@ -139,17 +155,17 @@ it215: (bool) use it215 algorithm
                         # now expand value to signed byte
                         if (width < 8):
                                 shift = 8 - width
-                                v = (value << shift) & 0xff
+                                v = signbyte((value << shift) & 0xff)
                                 v >>= shift
                         else:
-                                v = value
+                                v = signbyte(value & 0xff)
                         
                         # integrate upon the sample values
-                        d1 = (d1 + v) & 0xff
-                        d2 = (d2 + d1) & 0xff
+                        d1 = signbyte((unsignbyte(d1) + unsignbyte(v)) & 0xff)
+                        d2 = signbyte((unsignbyte(d2) + unsignbyte(d1)) & 0xff)
                         
                         # .. and store it into the buffer
-                        dest.write(chr(d2) if it215 else chr(d1))
+                        dest.write(struct.pack('b', d2) if it215 else struct.pack('b', d1))
                         blkpos += 1
 
                 # now subtract block length from total length and go on
@@ -226,19 +242,20 @@ it215: (bool) use it215 algorithm
                         # now expand value to signed byte
                         if (width < 16):
                                 shift = 16 - width
-                                v = (value << shift) & 0xffff
+                                v = signword((value << shift) & 0xffff)
                                 v >>= shift
                         else:
-                                v = value
+                                v = signword(value & 0xffff)
                         
                         # integrate upon the sample values
-                        d1 = (d1 + v) & 0xffff
-                        d2 = (d2 + d1) & 0xffff
+                        d1 = signword((unsignword(d1) + unsignword(v)) & 0xffff)
+                        d2 = signword((unsignword(d2) + unsignword(d1)) & 0xffff)
                         
                         # .. and store it into the buffer
                         outval = d2 if it215 else d1
-                        dest.write(chr(outval & 0xFF))
-                        dest.write(chr(outval >> 8))
+                        #dest.write(struct.pack('B', outval & 0xff) if it215 else struct.pack('b', outval >> 8))
+                        dest.write(struct.pack('B', outval & 0xff))
+                        dest.write(struct.pack('b', outval >> 8))
                         blkpos += 1
 
                 # now subtract block length from total length and go on
