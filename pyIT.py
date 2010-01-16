@@ -307,8 +307,21 @@ class ITsample:
       
       sys.stderr.write("   length in samples is %d\n" % (length,))
       if self.IsCompressed:
-        sys.stderr.write("   compressed\n")
-        # set up stringio buffer(s)
+        sys.stderr.write("   compressed!\n")
+        
+        ## ghetto sample decompression
+        #inf.seek(offs_sampledata)
+        #length = length * mult
+        #sys.stderr.write("   ghetto compressed sample at %d, max length is %d\n" % (offs_sampledata, length))
+        #
+        #self.SampleData = inf.read(length)
+        #readlen = len(self.SampleData)
+        #if readlen < length:
+        #  # add some dummy data to avoid confusing poor pyIT :(
+        #  self.SampleData = self.SampleData + ('\x00' * (length - readlen))
+        #  sys.stderr.write("  SampleData length is now %d\n" % (len(self.SampleData),))
+        
+        # real sample decompression
         decompressedbuf = StringIO()
         
         if self.Is16bit:
@@ -316,7 +329,7 @@ class ITsample:
           sys.stderr.write("   16-bit compressed sample at %d\n" % (offs_sampledata,))
           
           try:
-            pyitcompress.it_decompress16(decompressedbuf, length, inf, True)
+            pyitcompress.it_decompress16(decompressedbuf, length, inf, False)
             #sys.stderr.write("   decompressed length: %d\n" % (len(decompressedbuf.getvalue()),))
             self.SampleData = decompressedbuf.getvalue()
             self.IsCompressed = False
@@ -328,7 +341,7 @@ class ITsample:
           sys.stderr.write("   8-bit compressed sample at %d\n" % (offs_sampledata,))
           
           try:
-            pyitcompress.it_decompress8(decompressedbuf, length, inf, True)
+            pyitcompress.it_decompress8(decompressedbuf, length, inf, False)
             #sys.stderr.write("   decompressed length: %d\n" % (len(decompressedbuf.getvalue()),))
             self.SampleData = decompressedbuf.getvalue()
             self.IsCompressed = False
