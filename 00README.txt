@@ -85,7 +85,10 @@ strftime substitution chart from http://docs.python.org/library/time.html
 
 -[ known problems ]------------------------------------------------------------
 
-- pyIT module makes some files larger.
+- pyIT module:
+  - can't compress samples. nothing can. :(
+  - re-saves compressed samples as uncompressed, even if unmodified.
+  - handles IT 2.15 compressed samples incorrectly.
 
 - the top pane doesn't get updated after a checkmarked-files commit, if the
   file displayed there was checked.  reload the file and it will be updated.
@@ -94,4 +97,4 @@ strftime substitution chart from http://docs.python.org/library/time.html
 
 -[ goodnight moon ]------------------------------------------------------------
 
-2008 mike burke / mrb / mrburke@gmail.com
+2008-2010 mike burke / mrb / mrburke@gmail.com
