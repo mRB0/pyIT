@@ -34,7 +34,7 @@ import logging
 import pyitcompress
 
 
-class ITenvelope_node:
+class ITenvelope_node(object):
     def __init__(self):
         self.y_val = 0
         self.tick = 0
@@ -42,7 +42,7 @@ class ITenvelope_node:
     def __len__(self):
         return 3
         
-class ITenvelope:
+class ITenvelope(object):
     def __init__(self):
         
         self.IsOn = False
@@ -203,7 +203,7 @@ class ITinstrument(object):
     def __len__(self):
         return 554
 
-class ITsample:
+class ITsample(object):
     def __init__(self):
         self.Filename = ''
         self.GvL = 64
@@ -411,29 +411,139 @@ class ITsample:
     def __len__(self):
         return 80
     
-
-class ITpattern:
+class ITnote(object):
     def __init__(self):
-        self.rows = 64
+        self.Note = None
+        self.Instrument = None
+        self.Volume = None
+        self.Effect = None
+        self.EffectArg = None
+    
+    def note_num_as_str(self, note_num):
+        # C C# D D# E F F# G G# A A# B
+        if self.Note is None:
+            return '...'
+        if self.Note == 254:
+            return '^^^'
+        if self.Note == 255:
+            return '==='
+        
+        note_list = [
+            'C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B']
+        
+        pitch = note_list[note_num % 12]
+        octave = note_num / 12
+        
+        return ('%-2s%d' % (pitch, octave)).replace(' ', '-')
+    
+    def __str__(self):
+        if self.Instrument is None:
+            instrument = ".."
+        else:
+            instrument = "%02d" % self.Instrument
+        if self.Volume is None:
+            volume = ".."
+        else:
+            volume = "%02d" % self.Volume
+            
+        return "%s %s %s" % (self.note_num_as_str(self.Note),
+                                 instrument,
+                                 volume
+                                )
+    
+    
+class ITpattern(object):
+    def __init__(self):
         self.ptnData = ''
+        
+        # Fill pattern with a bunch of empty ITnote instances.
+        # self.Rows[4][2] would return the note on the third channel in 
+        # the fifth row.
+        self.Rows = [[ITnote() for i in xrange(64)] for j in xrange(64)]
     
     def __len__(self):
         return len(self.ptnData) + 8
     
-    def __eq__(self, other):
-        return self.rows == other.rows and self.ptnData == other.ptnData
+    #def __eq__(self, other):
+    #    return self.rows == other.rows and self.ptnData == other.ptnData
         
     def write(self, outf):
-        outf.write(struct.pack('<HH4s', len(self.ptnData), self.rows, '\0'*4))
+        outf.write(struct.pack('<HH4s', len(self.ptnData), len(self.Rows), '\0'*4))
         outf.write(self.ptnData)
     
-    def load(self, inf):
-        """Load IT pattern data from inf.    inf should already be seeked to 
-             the offset of the pattern to be loaded."""
-        (ptnlen, self.rows, discard) = struct.unpack('<HH4s', inf.read(8))
-        self.ptnData = inf.read(ptnlen)
+    def unpack(self, rows):
+        """
+        Unpack the raw pattern data stored in self.ptnData.
+        """
         
-class ITfile:
+        # TODO: "Use last row data" needs to use the last row that
+        #       ACTUALLY CONTAINS the requested data.
+        
+        log = logging.getLogger("pyIT.ITpattern.unpack")
+        
+        ptn_reader = StringIO(self.ptnData)
+        masks = [0] * 64 # prepare mask variables
+        
+        # Reset row data
+        self.Rows = [[ITnote() for i in xrange(64)] for j in xrange(rows)]
+        
+        row_num = 0
+        
+        while True:
+            chan_data = ptn_reader.read(1)
+            
+            if chan_data == '': # end of data
+                break
+            
+            chan_data = struct.unpack('<B', chan_data)[0]
+            
+            if chan_data == 0: # end of row
+                row_num = row_num + 1
+                continue
+            
+            chan_num = (chan_data-1) & 63 # get channel number for this data
+            
+            if chan_data & 128: # new value for this channel's mask variable
+                masks[chan_num] = struct.unpack('<B', ptn_reader.read(1))[0]
+            
+            mask = masks[chan_num]
+            if mask & 1:
+                self.Rows[row_num][chan_num].Note = struct.unpack('<B', ptn_reader.read(1))[0]
+            if mask & 2:
+                self.Rows[row_num][chan_num].Instrument = struct.unpack('<B', ptn_reader.read(1))[0]
+            if mask & 4:
+                self.Rows[row_num][chan_num].Volume = struct.unpack('<B', ptn_reader.read(1))[0]
+            if mask & 8:
+                self.Rows[row_num][chan_num].Effect = struct.unpack('<B', ptn_reader.read(1))[0]
+                self.Rows[row_num][chan_num].EffectArg = struct.unpack('<B', ptn_reader.read(1))[0]
+            if mask & 16:
+                self.Rows[row_num][chan_num].Note = self.Rows[row_num-1][chan_num].Note
+            if mask & 32:
+                self.Rows[row_num][chan_num].Instrument = self.Rows[row_num-1][chan_num].Instrument
+            if mask & 64:
+                self.Rows[row_num][chan_num].Volume = self.Rows[row_num-1][chan_num].Volume
+            if mask & 128:
+                self.Rows[row_num][chan_num].Effect = self.Rows[row_num-1][chan_num].Effect
+                self.Rows[row_num][chan_num].EffectArg = self.Rows[row_num-1][chan_num].EffectArg
+        
+        
+        row_num = 0
+        for row in self.Rows:
+            pretty_row = ' | '.join([str(row[x]) for x in xrange(4)])
+            log.debug("Row %02d: %s" % (row_num, pretty_row))
+            row_num = row_num + 1
+                
+        
+            
+        
+    def load(self, inf):
+        """Load IT pattern data from inf.  inf should already be seeked to
+           the offset of the pattern to be loaded."""
+        (ptnlen, rows, discard) = struct.unpack('<HH4s', inf.read(8))
+        self.ptnData = inf.read(ptnlen)
+        self.unpack(rows)
+        
+class ITfile(object):
     Orderlist_offs = 192 # length of IT header before any dynamic data (order list)
     pyIT_Cwt_v = 0x4101 # This value will be written into Cwt_v ("compatible with
                         # version") upon write().
@@ -467,7 +577,7 @@ class ITfile:
         
         self.Instruments = []
         self.Samples = []
-        self.Ptns = []
+        self.Patterns = []
 
     def open(self, infilename):
         log = logging.getLogger("pyIT.ITfile.open")
@@ -536,14 +646,14 @@ class ITfile:
         
         # load patterns
         
-        self.Ptns = []
+        self.Patterns = []
         
         for offs_ptn in offs_ptns:
             inf.seek(offs_ptn)
             
             ptn = ITpattern()
             ptn.load(inf)
-            self.Ptns.append(ptn)
+            self.Patterns.append(ptn)
         
         # load instruments
         
@@ -581,6 +691,7 @@ class ITfile:
         log = logging.getLogger("pyIT.ITfile.write")
         outf = file(outfilename, "wb")
         
+        # 
         if (len(self.Message) > 0):
             self.Special = self.Special | 0x0001
             message = self.Message.replace('\n', '\r') + '\0'
@@ -606,7 +717,7 @@ class ITfile:
         instoffs_offs = ITfile.Orderlist_offs + len(self.Orders)
         sampoffs_offs = instoffs_offs + len(self.Instruments)*4
         ptnoffs_offs = sampoffs_offs + len(self.Samples)*4
-        msg_offs = ptnoffs_offs + len(self.Ptns)*4
+        msg_offs = ptnoffs_offs + len(self.Patterns)*4
         ptn_offs = msg_offs + len(message)
         
         # pack patterns so we can predict total pattern data length, and
@@ -624,7 +735,7 @@ class ITfile:
                 offs = offs + len(unique_ITpatterns[x])
         
         
-        #samp_offs = ptn_offs + sum([len(x) for x in self.Ptns])
+        #samp_offs = ptn_offs + sum([len(x) for x in self.Patterns])
         samp_offs = offs
         inst_offs = samp_offs + sum([len(x) for x in self.Samples])
         sampledata_offs = inst_offs + sum([len(x) for x in self.Instruments])
@@ -634,10 +745,10 @@ class ITfile:
         
         outf.write(struct.pack('<4s26sBB', 'IMPM', songname, self.PHilight_minor, self.PHilight_major))
         outf.write(struct.pack('<HHHHHHHH', len(self.Orders), len(self.Instruments),
-                                                     len(self.Samples), len(self.Ptns),
-                                                     self.Cwt_v, self.Cmwt, self.Flags, self.Special))
+                                            len(self.Samples), len(self.Patterns),
+                                            self.Cwt_v, self.Cmwt, self.Flags, self.Special))
         outf.write(struct.pack('<BBBBBBHII', self.GV, self.MV, self.IS, self.IT,
-                                                     self.Sep, self.PWD, len(message), msg_offs, 0))
+                                             self.Sep, self.PWD, len(message), msg_offs, 0))
         for x in self.ChannelPans:
             # x >= 128 == muted
             if (x > 64 and x < 128):
@@ -721,7 +832,7 @@ class ITfile:
         ptnlist = []
         ptns = []
         
-        for ptn in self.Ptns:
+        for ptn in self.Patterns:
             if ptn in ptns:
                 # already in pattern set, create a reference only
                 ptnlist.append(ptns.index(ptn))
@@ -745,7 +856,9 @@ def process():
     
     itf.open(sys.argv[1])
 
-    logging.info("Cwt_v is 0x%04x" % (itf.Cwt_v,))
+    #logging.info("Cwt_v is 0x%04x" % (itf.Cwt_v,))
+    
+    open("ptn.dat", "wb").write(itf.Patterns[0].ptnData)
     
     ## set all samples to "uncompressed" (should prevent re-saving of
     ## compressed samples in favour of uncompressed versions)
