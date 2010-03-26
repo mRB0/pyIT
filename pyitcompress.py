@@ -30,6 +30,7 @@
 # (I suppose this could be considered a merge between the two.)
 import struct
 import sys
+import logging
 
 class ReadBitsState:
     def __init__(self):
@@ -46,7 +47,8 @@ def it_readbits(n, state, stream):
     value = 0
     i = n
     
-    #print "[it_readbits: bitnum=%d, bitbuf=%d, n=%d]" % (state.bitnum, state.bitbuf, n)
+    #log = logging.getLogger("pyitcompress.it_readbits")
+    #log.debug("bitnum=%d, bitbuf=%d, n=%d" % (state.bitnum, state.bitbuf, n))
     
     # this could be better
     while i:
@@ -55,7 +57,7 @@ def it_readbits(n, state, stream):
             state.bitbuf = struct.unpack('@B', stream.read(1))[0]
             state.bitnum = 8
         value >>= 1
-        #print "[it_readbits: state.bitbuf = 0x%x, state.bitbuf<<31 = 0x%x]" % (state.bitbuf, state.bitbuf<<31)
+        #log.debug("state.bitbuf = 0x%x, state.bitbuf<<31 = 0x%x" % (state.bitbuf, state.bitbuf<<31))
         value |= (state.bitbuf << 31) & 0xffffffff
         state.bitbuf >>= 1
         state.bitnum -= 1
@@ -64,43 +66,47 @@ def it_readbits(n, state, stream):
 
 
 def signbyte(b):
-    #sys.stderr.write("[signbyte: converting %d]\n" % (b,))
+    #logging.getLogger("pyitcompress.signbyte").debug("signbyte: converting %d" % (b,))
     return struct.unpack('b', struct.pack('B', b))[0]
 
 def unsignbyte(b):
-    #sys.stderr.write("[unsignbyte: converting %d]\n" % (b,))
+    #logging.getLogger("pyitcompress.unsignbyte").debug("converting %d" % (b,))
     return struct.unpack('B', struct.pack('b', b))[0]
 
 def signword(w):
-    #sys.stderr.write("[signbyte: converting %d]\n" % (b,))
+    #logging.getLogger("pyitcompress.signword").debug("converting %d" % (b,))
     return struct.unpack('h', struct.pack('H', w))[0]
 
 def unsignword(w):
-    #sys.stderr.write("[unsignbyte: converting %d]\n" % (b,))
+    #logging.getLogger("pyitcompress.unsignword").debug("converting %d" % (b,))
     return struct.unpack('H', struct.pack('h', w))[0]
 
 def it_decompress8(dest, len, srcbuf, it215):
     """
-    dest: (file-like object) output buffer
+    dest: (file-like object) output buffer for decompressed data
     len: number of samples
     srcbuf: (file-like object) input
     it215: (bool) use it215 algorithm
+    
+    RETURN: actual size (in bytes) of COMPRESSED data
     """
-#    const uint8_t *filebuf     # source buffer containing compressed sample data
-#    const uint8_t *srcbuf      # current position in source buffer
-#    int8_t *destpos        # position in destination buffer which will be returned
-#    uint16_t blklen        # length of compressed data block in samples
-#    uint16_t blkpos        # position in block
-#    uint8_t width          # actual "bit width"
-#    uint16_t value         # value read from file to be processed
-#    int8_t d1, d2          # integrator buffers (d2 for it2.15)
-#    int8_t v               # sample value
+    
+    #const uint8_t *filebuf     # source buffer containing compressed sample data
+    #const uint8_t *srcbuf      # current position in source buffer
+    #int8_t *destpos        # position in destination buffer which will be returned
+    #uint16_t blklen        # length of compressed data block in samples
+    #uint16_t blkpos        # position in block
+    #uint8_t width          # actual "bit width"
+    #uint16_t value         # value read from file to be processed
+    #int8_t d1, d2          # integrator buffers (d2 for it2.15)
+    #int8_t v               # sample value
+    
     state = ReadBitsState()    # state for it_readbits
     
-#    filebuf = srcbuf = (const uint8_t *) file
-#    destpos = (int8_t *) dest
+    log = logging.getLogger("pyitcompress.it_decompress8")
     
-    #print
+    startpos = srcbuf.tell()
+    log.debug("startpos = %d" % (startpos,))
     
     # now unpack data till the dest buffer is full
     while (len):
@@ -121,13 +127,13 @@ def it_decompress8(dest, len, srcbuf, it215):
         
         # now uncompress the data block
         while (blkpos < blklen):
-            #print "[it_decompress8: while2: blkpos = %d, blklen = %d]" % (blkpos, blklen)
+            log.debug("while2: blkpos = %d, blklen = %d" % (blkpos, blklen))
             
             value = it_readbits(width, state, srcbuf)
             
             if (width < 7):
                 # method 1 (1-6 bits)
-                #print "[it_decompress8: method 1]"
+                log.debug("method 1")
                 # check for "100..."
                 if (value == 1 << (width - 1)):
                     # yes!
@@ -136,7 +142,7 @@ def it_decompress8(dest, len, srcbuf, it215):
                     continue # ... next value
             elif (width < 9):
                 # method 2 (7-8 bits)
-                #print "[it_decompress8: method 2]"
+                log.debug("method 2")
                 border = (0xFF >> (9 - width)) - 4 # lower border for width chg
                 if (value > border and value <= (border + 8)):
                     value -= border # convert width to 1-8
@@ -145,13 +151,13 @@ def it_decompress8(dest, len, srcbuf, it215):
             elif (width == 9):
                 # method 3 (9 bits)
                 # bit 8 set?
-                #print "[it_decompress8: method 3: width=0x%x, value=0x%x]" % (width, value)
+                log.debug("method 3: width=0x%x, value=0x%x" % (width, value))
                 if (value & 0x100):
                     width = (value + 1) & 0xff # new width...
                     continue # ... and next value
             else:
                 # illegal width, abort
-                print("Illegal width\n")
+                log.error("Illegal width")
                 return
 
             # now expand value to signed byte
@@ -172,28 +178,35 @@ def it_decompress8(dest, len, srcbuf, it215):
 
         # now subtract block length from total length and go on
         len -= blklen
+    
+    compressed_len = srcbuf.tell() - startpos
+    log.debug("size of compressed data: %d bytes" % (compressed_len))
+    
+    return compressed_len
 
 
 def it_decompress16(dest, len, srcbuf, it215):
     """
-    dest: (file-like object) output buffer
+    dest: (file-like object) output buffer for decompressed data
     len: number of samples
     srcbuf: (file-like object) input
     it215: (bool) use it215 algorithm
     """
-#    const uint8_t *filebuf     # source buffer containing compressed sample data
-#    const uint8_t *srcbuf      # current position in source buffer
-#    int16_t *destpos        # position in destination buffer which will be returned
-#    uint16_t blklen        # length of compressed data block in samples
-#    uint16_t blkpos        # position in block
-#    uint8_t width          # actual "bit width"
-#    uint32_t value         # value read from file to be processed
-#    int16_t d1, d2          # integrator buffers (d2 for it2.15)
-#    int16_t v               # sample value
+    #const uint8_t *filebuf     # source buffer containing compressed sample data
+    #const uint8_t *srcbuf      # current position in source buffer
+    #int16_t *destpos        # position in destination buffer which will be returned
+    #uint16_t blklen        # length of compressed data block in samples
+    #uint16_t blkpos        # position in block
+    #uint8_t width          # actual "bit width"
+    #uint32_t value         # value read from file to be processed
+    #int16_t d1, d2          # integrator buffers (d2 for it2.15)
+    #int16_t v               # sample value
     state = ReadBitsState()    # state for it_readbits
-
-#    filebuf = srcbuf = (const uint8_t *) file
-#    destpos = (int8_t *) dest
+    
+    log = logging.getLogger("pyitcompress.it_decompress16")
+    
+    startpos = srcbuf.tell()
+    log.debug("startpos = %d" % (startpos,))
 
     # now unpack data till the dest buffer is full
     while (len):
@@ -239,7 +252,7 @@ def it_decompress16(dest, len, srcbuf, it215):
                     continue # ... and next value
             else:
                 # illegal width, abort
-                print("Illegal width\n")
+                log.error("Illegal width")
                 return
 
             # now expand value to signed byte
@@ -264,4 +277,8 @@ def it_decompress16(dest, len, srcbuf, it215):
         # now subtract block length from total length and go on
         len -= blklen
 
+    compressed_len = srcbuf.tell() - startpos
+    log.debug("size of compressed data: %d bytes" % (compressed_len))
+    
+    return compressed_len
 
