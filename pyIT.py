@@ -29,6 +29,7 @@ import sys
 import struct
 from cStringIO import StringIO
 import traceback
+import logging
 
 import pyitcompress
 
@@ -43,7 +44,7 @@ class ITenvelope_node:
         
 class ITenvelope:
     def __init__(self):
-                
+        
         self.IsOn = False
         self.LoopOn = False
         self.SusloopOn = False
@@ -122,7 +123,7 @@ class ITpitch_envelope(ITenvelope):
         ITenvelope.setFlags(self, flags)
         self.IsFilter = bool(flags & 0x80)
 
-class ITinstrument:
+class ITinstrument(object):
     def __init__(self):
         self.Filename = ''
         self.NNA = 0
@@ -235,8 +236,13 @@ class ITsample:
         self.ViR = 0
         
         self.SampleData = ''
+        self.CompressedSampleData = None
+        self._original_sample_data = self.SampleData
     
     def sampleDataLen(self):
+        """
+        Return the length of the sample data in SAMPLES.
+        """
         divider = 1
         if self.Is16bit:
             divider = divider * 2
@@ -245,9 +251,43 @@ class ITsample:
             
         return len(self.SampleData) / divider
     
+    def rawSampleData(self):
+        """
+        Return the raw sample data.
+        
+        If you are saving the sample data, this is the correct function to call
+        as it will return the COMPRESSED data if possible.
+        
+        If you are modifying the sample data, DO NOT call this function; use
+        SampleData directly. It's ok, I promise.
+        """
+        self._check_compression_status()
+        
+        if self.IsCompressed and self.CompressedSampleData is not None:
+            return self.CompressedSampleData
+        else:
+            return self.SampleData
+    
+    def _check_compression_status(self):
+        """
+        Check if the data should be stored compressed.
+        
+        If modifications were made to the sample data, and it was compressed,
+        we have to save it uncompressed, because re-compression is not
+        implemented.
+        
+        However, if it wasn't modified, we try to re-save the original
+        compressed data.
+        """
+        if self.IsCompressed and self.modified():
+            self.IsCompressed = False
+        
+        
     def write(self, outf, sample_offset):
         if not self.IsSample:
             self.SampleData = ''
+        
+        self._check_compression_status()
         
         flags = 0
         flags = flags | ((self.IsSample) << 0)
@@ -270,6 +310,8 @@ class ITsample:
         outf.write(struct.pack('<BBBB', self.ViS, self.ViD, self.ViT, self.ViR))
 
     def load(self, inf):
+        log = logging.getLogger('pyIT.ITsample.load')
+        
         (IMPS, self.Filename) = struct.unpack('<4s12s', inf.read(16))
         assert(IMPS == 'IMPS')
         
@@ -289,7 +331,7 @@ class ITsample:
         
         self.SampleName = inf.read(26).replace('\0', ' ')[:25]
         
-        #sys.stderr.write("\n=> Loading sample %s\n" % (self.SampleName,))
+        log.debug("=> Loading sample %s" % (self.SampleName,))
         
         (self.Cvt, self.DfP) = struct.unpack('<BB', inf.read(2))
         
@@ -306,55 +348,55 @@ class ITsample:
             if self.IsStereo:
                 mult = mult * 2
             
-            sys.stderr.write("     length in samples is %d\n" % (length,))
+            log.debug("     length in samples is %d" % (length,))
             if self.IsCompressed:
-                sys.stderr.write("     compressed!\n")
-                
-                ## ghetto sample decompression
-                #inf.seek(offs_sampledata)
-                #length = length * mult
-                #sys.stderr.write("     ghetto compressed sample at %d, max length is %d\n" % (offs_sampledata, length))
-                #
-                #self.SampleData = inf.read(length)
-                #readlen = len(self.SampleData)
-                #if readlen < length:
-                #    # add some dummy data to avoid confusing poor pyIT :(
-                #    self.SampleData = self.SampleData + ('\x00' * (length - readlen))
-                #    sys.stderr.write("    SampleData length is now %d\n" % (len(self.SampleData),))
+                log.debug("     compressed!")
                 
                 # real sample decompression
                 decompressedbuf = StringIO()
                 
                 if self.Is16bit:
-                    inf.seek(offs_sampledata)
-                    sys.stderr.write("     16-bit compressed sample at %d\n" % (offs_sampledata,))
-                    
-                    try:
-                        pyitcompress.it_decompress16(decompressedbuf, length, inf, False)
-                        #sys.stderr.write("     decompressed length: %d\n" % (len(decompressedbuf.getvalue()),))
-                        self.SampleData = decompressedbuf.getvalue()
-                        self.IsCompressed = False
-                    except:
-                        print
-                        traceback.print_exc()
+                    decompressor = pyitcompress.it_decompress16
+                    log.debug("     16-bit compressed sample at %d" % (offs_sampledata,))
                 else:
-                    inf.seek(offs_sampledata)
-                    sys.stderr.write("     8-bit compressed sample at %d\n" % (offs_sampledata,))
+                    decompressor = pyitcompress.it_decompress8
+                    log.debug("     8-bit compressed sample at %d" % (offs_sampledata,))
                     
-                    try:
-                        pyitcompress.it_decompress8(decompressedbuf, length, inf, False)
-                        #sys.stderr.write("     decompressed length: %d\n" % (len(decompressedbuf.getvalue()),))
-                        self.SampleData = decompressedbuf.getvalue()
-                        self.IsCompressed = False
-                    except:
-                        print
-                        traceback.print_exc()
+                inf.seek(offs_sampledata)
+                
+                try:
+                    # Load compressed sample
+                    compressed_len = decompressor(decompressedbuf, length, inf, False)
+                    self.SampleData = decompressedbuf.getvalue()
+                    log.debug("     compressed length: %d; decompressed length: %d" % (compressed_len, len(self.SampleData)))
+                    
+                    # Load actual compressed sample data in case we want
+                    # to re-save it later
+                    inf.seek(offs_sampledata)
+                    self.CompressedSampleData = inf.read(compressed_len)
+                    
+                    # Retain reference to original sample data; we can use
+                    # this with modified() to determine if the sample was
+                    # modified.
+                    # 
+                    # This is used later for re-saving compressed data.
+                    self._original_sample_data = self.SampleData
+                    
+                except:
+                    print
+                    traceback.print_exc()
             else:
+                # Load uncompressed sample
                 length = length * mult
-                sys.stderr.write("     length in bytes is %s\n" % (length,))
+                log.debug("     length in bytes is %s" % (length,))
                 inf.seek(offs_sampledata)
                 self.SampleData = inf.read(length)
+                self.CompressedSampleData = None
+                self._original_sample_data = self.SampleData
             
+    def modified(self):
+        return (self.SampleData is not self._original_sample_data)
+        
     def __len__(self):
         return 80
     
@@ -629,7 +671,7 @@ class ITfile:
         next_smpoffs = sampledata_offs
         for samp in self.Samples:
             samp.write(outf, next_smpoffs)
-            next_smpoffs = next_smpoffs + len(samp.SampleData)
+            next_smpoffs = next_smpoffs + len(samp.rawSampleData())
         eof = next_smpoffs
         
         assert(outf.tell() == inst_offs)
@@ -639,7 +681,7 @@ class ITfile:
         assert(outf.tell() == sampledata_offs)
         
         for samp in self.Samples:
-            outf.write(samp.SampleData)
+            outf.write(samp.rawSampleData())
         
         assert(outf.tell() == eof)
                 
@@ -662,11 +704,27 @@ class ITfile:
         return (ptnlist, ptns) 
 
 def process():
+    logging.basicConfig(level=logging.DEBUG)
+    # pyitcompress is like, really noisy on the DEBUG channel,
+    # and sample compression slows down a shitload if you let it print
+    # all that shit to your screen.
+    logging.getLogger("pyitcompress").setLevel(level=logging.WARNING)
+    
     itf = ITfile()
     
     assert(len(sys.argv) == 2)
     
     itf.open(sys.argv[1])
+    
+    ## set all samples to "uncompressed" (should prevent re-saving of
+    ## compressed samples in favour of uncompressed versions)
+    #for samp in itf.Samples:
+        #samp.IsCompressed = False
+    
+    ## modify all samples very slightly (should prevent re-saving of compressed
+    ## samples in favour of uncompressed versions)
+    #for samp in itf.Samples:
+        #samp.SampleData = samp.SampleData + "\0\0\0\0"
     
     #for samp in itf.Samples:
     #    print samp.SampleName.decode('cp437')
@@ -688,4 +746,5 @@ def process():
     #itf.write('bloo.it')
 
 if __name__ == '__main__':
+    
     process()
