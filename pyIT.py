@@ -284,6 +284,8 @@ class ITsample:
         
         
     def write(self, outf, sample_offset):
+        log = logging.getLogger('pyIT.ITsample.save')
+        
         if not self.IsSample:
             self.SampleData = ''
         
@@ -298,6 +300,10 @@ class ITsample:
         flags = flags | ((self.IsSusLooped) << 5)
         flags = flags | ((self.IsPingPongLoop) << 6)
         flags = flags | ((self.IsPingPongSusLoop) << 7)
+
+        log.debug("     Cvt (convert) = 0x%02x" % (self.Cvt,))
+        log.debug("     Flg (flags) = 0x%02x" % (flags,))
+        #self.Cvt = 0x01
         
         outf.write(struct.pack('<4s12s', 'IMPS', self.Filename))
         outf.write(struct.pack('<BBBB', 0, self.GvL, flags, self.Vol))
@@ -334,6 +340,8 @@ class ITsample:
         log.debug("=> Loading sample %s" % (self.SampleName,))
         
         (self.Cvt, self.DfP) = struct.unpack('<BB', inf.read(2))
+        log.debug("     Cvt (convert) = 0x%02x" % (self.Cvt,))
+        self.IT215Compression = self.IsCompressed and bool(self.Cvt & 0x04)
         
         (length, self.LoopBegin, self.LoopEnd, self.C5Speed) = struct.unpack('<IIII', inf.read(16))
         (self.SusLoopBegin, self.SusLoopEnd, offs_sampledata, self.ViS,
@@ -366,7 +374,10 @@ class ITsample:
                 
                 try:
                     # Load compressed sample
-                    compressed_len = decompressor(decompressedbuf, length, inf, False)
+                    if self.IT215Compression:
+                        log.debug("     IT 2.15 sample compression")
+                    
+                    compressed_len = decompressor(decompressedbuf, length, inf, self.IT215Compression)
                     self.SampleData = decompressedbuf.getvalue()
                     log.debug("     compressed length: %d; decompressed length: %d" % (compressed_len, len(self.SampleData)))
                     
@@ -424,6 +435,8 @@ class ITpattern:
         
 class ITfile:
     Orderlist_offs = 192 # length of IT header before any dynamic data (order list)
+    pyIT_Cwt_v = 0x4101 # This value will be written into Cwt_v ("compatible with
+                        # version") upon write().
     
     def __init__(self):
         self.SongName = 'gohoho'
@@ -433,7 +446,7 @@ class ITfile:
         # OrdNum, InsNum, SmpNum, PatNum are used only when loading files; 
         # the actual numbers will be stored as len(lists)
         
-        self.Cwt_v = 0x0214
+        self.Cwt_v = ITfile.pyIT_Cwt_v
         self.Cmwt = 0x0214
         self.Flags = 0x000d
         self.Special = 0x0006
@@ -457,6 +470,7 @@ class ITfile:
         self.Ptns = []
 
     def open(self, infilename):
+        log = logging.getLogger("pyIT.ITfile.open")
         inf = file(infilename, "rb")
         
         buf = inf.read(30)
@@ -468,7 +482,7 @@ class ITfile:
         
         buf = inf.read(34)
         (self.PHilight_minor, self.PHilight_major, n_ords, n_insts, n_samps,
-         n_ptns, Cwt_v, Cmwt, self.Flags, self.Special, self.GV, self.MV,
+         n_ptns, self.Cwt_v, self.Cmwt, self.Flags, self.Special, self.GV, self.MV,
          self.IS, self.IT, self.Sep, self.PWD, msglen, offs_msg, reserved) = struct.unpack(
          '<BBHHHHHHHHBBBBBBHII', buf)
         
@@ -564,6 +578,7 @@ class ITfile:
         inf.close()
         
     def write(self, outfilename):
+        log = logging.getLogger("pyIT.ITfile.write")
         outf = file(outfilename, "wb")
         
         if (len(self.Message) > 0):
@@ -572,7 +587,21 @@ class ITfile:
         else:
             self.Special = self.Special & (~0x0001)
             message = ''
+
+        # We set "Compatible with" to IT 2.15 when saving IT 2.15 samples,
+        # so that modplug-based loaders knows what the hell is up.
+        # 
+        # Let's scan all our samples to see.
+
+        self.Cwt_v = ITfile.pyIT_Cwt_v
         
+        self.Cmwt = 0x0214
+        for sample in self.Samples:
+            sample._check_compression_status()
+            if sample.IsCompressed and sample.IT215Compression:
+                log.debug("Song contains at least one IT 2.15 sample; setting cmwt == 0x0215")
+                self.Cmwt = 0x0215
+                break
         
         instoffs_offs = ITfile.Orderlist_offs + len(self.Orders)
         sampoffs_offs = instoffs_offs + len(self.Instruments)*4
@@ -715,6 +744,8 @@ def process():
     assert(len(sys.argv) == 2)
     
     itf.open(sys.argv[1])
+
+    logging.info("Cwt_v is 0x%04x" % (itf.Cwt_v,))
     
     ## set all samples to "uncompressed" (should prevent re-saving of
     ## compressed samples in favour of uncompressed versions)
