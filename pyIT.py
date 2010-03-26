@@ -34,40 +34,40 @@ import pyitcompress
 
 
 class ITenvelope_node:
-        def __init__(self):
-                self.y_val = 0
-                self.tick = 0
+    def __init__(self):
+        self.y_val = 0
+        self.tick = 0
         
-        def __len__(self):
-                return 3
+    def __len__(self):
+        return 3
         
 class ITenvelope:
-        def __init__(self):
+    def __init__(self):
                 
-                self.IsOn = False
-                self.LoopOn = False
-                self.SusloopOn = False
-                
-                self.LpB = 0
-                self.LpE = 0
-                self.SLB = 0
-                self.SLE = 0
-                
-                # xxx convert this to not have 25 nodes always, and remove numNodePoints;
-                # the self.Nodes list should contain the number of node points
-                self.numNodePoints = 0
-                self.Nodes = [ITenvelope_node() for i in xrange(25)] # create 25 nodes
+        self.IsOn = False
+        self.LoopOn = False
+        self.SusloopOn = False
         
-        def extraFlags(self):
-                return 0
+        self.LpB = 0
+        self.LpE = 0
+        self.SLB = 0
+        self.SLE = 0
+        
+        # xxx convert this to not have 25 nodes always, and remove numNodePoints;
+        # the self.Nodes list should contain the number of node points
+        self.numNodePoints = 0
+        self.Nodes = [ITenvelope_node() for i in xrange(25)] # create 25 nodes
+
+    def extraFlags(self):
+        return 0
                 
-        def write(self, outf):
-                flags = 0
-                flags = flags | ((self.IsOn) << 0)
-                flags = flags | ((self.LoopOn) << 1)
-                flags = flags | ((self.SusloopOn) << 2)
+    def write(self, outf):
+        flags = 0
+        flags = flags | ((self.IsOn) << 0)
+        flags = flags | ((self.LoopOn) << 1)
+        flags = flags | ((self.SusloopOn) << 2)
         flags = flags | self.extraFlags()
-        
+    
         outf.write(struct.pack('<BBBB', flags, self.numNodePoints, self.LpB, self.LpE))
         outf.write(struct.pack('<BB', self.SLB, self.SLE))
         
@@ -75,7 +75,7 @@ class ITenvelope:
             outf.write(struct.pack('<bH', node.y_val, node.tick))
         
         outf.write('\0')
-        
+    
     def load(self, inf):
         (flags, self.numNodePoints, self.LpB, self.LpE, self.SLB,
          self.SLE) = struct.unpack('<BBBBBB', inf.read(6))
@@ -289,7 +289,7 @@ class ITsample:
         
         self.SampleName = inf.read(26).replace('\0', ' ')[:25]
         
-        sys.stderr.write("\n=> Loading sample %s\n" % (self.SampleName,))
+        #sys.stderr.write("\n=> Loading sample %s\n" % (self.SampleName,))
         
         (self.Cvt, self.DfP) = struct.unpack('<BB', inf.read(2))
         
