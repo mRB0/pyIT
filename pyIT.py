@@ -476,13 +476,11 @@ class ITpattern(object):
         Unpack the raw pattern data stored in self.ptnData.
         """
         
-        # TODO: "Use last row data" needs to use the last row that
-        #       ACTUALLY CONTAINS the requested data.
-        
         log = logging.getLogger("pyIT.ITpattern.unpack")
         
         ptn_reader = StringIO(self.ptnData)
         masks = [0] * 64 # prepare mask variables
+        last_note = [ITnote() for i in xrange(64)] # last note storage
         
         # Reset row data
         self.Rows = [[ITnote() for i in xrange(64)] for j in xrange(rows)]
@@ -509,23 +507,28 @@ class ITpattern(object):
             mask = masks[chan_num]
             if mask & 1:
                 self.Rows[row_num][chan_num].Note = struct.unpack('<B', ptn_reader.read(1))[0]
+                last_note[chan_num].Note = self.Rows[row_num][chan_num].Note
             if mask & 2:
                 self.Rows[row_num][chan_num].Instrument = struct.unpack('<B', ptn_reader.read(1))[0]
+                last_note[chan_num].Instrument = self.Rows[row_num][chan_num].Instrument
             if mask & 4:
                 self.Rows[row_num][chan_num].Volume = struct.unpack('<B', ptn_reader.read(1))[0]
+                last_note[chan_num].Volume = self.Rows[row_num][chan_num].Volume
             if mask & 8:
                 self.Rows[row_num][chan_num].Effect = struct.unpack('<B', ptn_reader.read(1))[0]
                 self.Rows[row_num][chan_num].EffectArg = struct.unpack('<B', ptn_reader.read(1))[0]
+                last_note[chan_num].Effect = self.Rows[row_num][chan_num].Effect
+                last_note[chan_num].Effect = self.Rows[row_num][chan_num].Effect
             if mask & 16:
-                self.Rows[row_num][chan_num].Note = self.Rows[row_num-1][chan_num].Note
+                self.Rows[row_num][chan_num].Note = last_note[chan_num].Note
             if mask & 32:
-                self.Rows[row_num][chan_num].Instrument = self.Rows[row_num-1][chan_num].Instrument
+                self.Rows[row_num][chan_num].Instrument = last_note[chan_num].Instrument
             if mask & 64:
-                self.Rows[row_num][chan_num].Volume = self.Rows[row_num-1][chan_num].Volume
+                self.Rows[row_num][chan_num].Volume = last_note[chan_num].Volume
             if mask & 128:
-                self.Rows[row_num][chan_num].Effect = self.Rows[row_num-1][chan_num].Effect
-                self.Rows[row_num][chan_num].EffectArg = self.Rows[row_num-1][chan_num].EffectArg
-        
+                self.Rows[row_num][chan_num].Effect = last_note[chan_num].Effect
+                self.Rows[row_num][chan_num].EffectArg = last_note[chan_num].EffectArg
+            
         
         row_num = 0
         for row in self.Rows:
@@ -691,7 +694,7 @@ class ITfile(object):
         log = logging.getLogger("pyIT.ITfile.write")
         outf = file(outfilename, "wb")
         
-        # 
+        # This is a comment. I like comments.
         if (len(self.Message) > 0):
             self.Special = self.Special | 0x0001
             message = self.Message.replace('\n', '\r') + '\0'
