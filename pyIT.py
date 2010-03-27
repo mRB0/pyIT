@@ -454,9 +454,21 @@ class ITnote(object):
         else:
             volume = "%02d" % self.Volume
             
-        return "%s %s %s" % (self.note_num_as_str(self.Note),
+        if self.Effect is None:
+            effect = ".."
+        else:
+            effect = "%02d" % self.Effect
+            
+        if self.EffectArg is None:
+            effectarg = ".."
+        else:
+            effectarg = "%02x" % self.EffectArg
+            
+        return "%s %s %s %s%s" % (self.note_num_as_str(self.Note),
                                  instrument,
-                                 volume
+                                 volume,
+                                 effect,
+                                 effectarg
                                 )
     
     
@@ -525,7 +537,7 @@ class ITpattern(object):
                 (self.Rows[row_num][chan_num].Effect,
                  self.Rows[row_num][chan_num].EffectArg) = struct.unpack('<BB', ptn_reader.read(2))
                 last_note[chan_num].Effect = self.Rows[row_num][chan_num].Effect
-                last_note[chan_num].Effect = self.Rows[row_num][chan_num].Effect
+                last_note[chan_num].EffectArg = self.Rows[row_num][chan_num].EffectArg
             if mask & 16:
                 self.Rows[row_num][chan_num].Note = last_note[chan_num].Note
             if mask & 32:
