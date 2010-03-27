@@ -25,6 +25,7 @@ todo:
  
 """
 
+import os.path
 import sys
 import struct
 from cStringIO import StringIO
@@ -419,6 +420,13 @@ class ITnote(object):
         self.Effect = None
         self.EffectArg = None
     
+    def __eq__(self, other):
+        return (self.Note == other.Note and
+                self.Instrument == other.Instrument and
+                self.Volume == other.Volume and
+                self.Effect == other.Effect and
+                self.EffectArg == other.EffectArg)
+        
     def note_num_as_str(self, note_num):
         # C C# D D# E F F# G G# A A# B
         if self.Note is None:
@@ -454,31 +462,30 @@ class ITnote(object):
     
 class ITpattern(object):
     def __init__(self):
-        self.ptnData = ''
-        
         # Fill pattern with a bunch of empty ITnote instances.
         # self.Rows[4][2] would return the note on the third channel in 
         # the fifth row.
         self.Rows = [[ITnote() for i in xrange(64)] for j in xrange(64)]
     
     def __len__(self):
-        return len(self.ptnData) + 8
+        return len(self.pack()) + 8
     
-    #def __eq__(self, other):
-    #    return self.rows == other.rows and self.ptnData == other.ptnData
+    def __eq__(self, other):
+        return self.Rows == other.Rows
         
     def write(self, outf):
-        outf.write(struct.pack('<HH4s', len(self.ptnData), len(self.Rows), '\0'*4))
-        outf.write(self.ptnData)
+        ptndata = self.pack()
+        outf.write(struct.pack('<HH4s', len(ptndata), len(self.Rows), '\0'*4))
+        outf.write(ptndata)
     
-    def unpack(self, rows):
+    def unpack(self, rows, ptndata):
         """
         Unpack the raw pattern data stored in self.ptnData.
         """
         
         log = logging.getLogger("pyIT.ITpattern.unpack")
         
-        ptn_reader = StringIO(self.ptnData)
+        ptn_reader = StringIO(ptndata)
         masks = [0] * 64 # prepare mask variables
         last_note = [ITnote() for i in xrange(64)] # last note storage
         
@@ -515,8 +522,8 @@ class ITpattern(object):
                 self.Rows[row_num][chan_num].Volume = struct.unpack('<B', ptn_reader.read(1))[0]
                 last_note[chan_num].Volume = self.Rows[row_num][chan_num].Volume
             if mask & 8:
-                self.Rows[row_num][chan_num].Effect = struct.unpack('<B', ptn_reader.read(1))[0]
-                self.Rows[row_num][chan_num].EffectArg = struct.unpack('<B', ptn_reader.read(1))[0]
+                (self.Rows[row_num][chan_num].Effect,
+                 self.Rows[row_num][chan_num].EffectArg) = struct.unpack('<BB', ptn_reader.read(2))
                 last_note[chan_num].Effect = self.Rows[row_num][chan_num].Effect
                 last_note[chan_num].Effect = self.Rows[row_num][chan_num].Effect
             if mask & 16:
@@ -536,15 +543,100 @@ class ITpattern(object):
             log.debug("Row %02d: %s" % (row_num, pretty_row))
             row_num = row_num + 1
                 
+    def pack(self):
+        """
+        Pack pattern data back and return it as a string of raw data.
+        """
+        log = logging.getLogger("pyIT.ITpattern.unpack")
         
+        ptn_writer = StringIO()
+        masks = [0] * 64 # prepare mask variables
+        last_note = [ITnote() for i in xrange(64)] # last note storage
+        empty_note = ITnote()
+        
+        for row_data in self.Rows:
+            for chan_num in xrange(64):
+                # Anything in channel?
+                note = row_data[chan_num]
+                if note == empty_note:
+                    continue
+                
+                # Find out what mask variable should be, and pack note data
+                # in a temporary StringIO.
+                # 
+                # This needs to be stored in a temporary place, as chan_data
+                # and mask won't be known until after we've looked at the
+                # entire note.
+                mask = 0
+                packed_note = StringIO()
+                
+                if note.Note is not None:
+                    if note.Note == last_note[chan_num].Note:
+                        mask |= 16
+                    else:
+                        packed_note.write(struct.pack('<B', note.Note))
+                        last_note[chan_num].Note = note.Note
+                        mask |= 1
+                if note.Instrument is not None:
+                    if note.Instrument == last_note[chan_num].Instrument:
+                        mask |= 32
+                    else:
+                        packed_note.write(struct.pack('<B', note.Instrument))
+                        last_note[chan_num].Instrument = note.Instrument
+                        mask |= 2
+                if note.Volume is not None:
+                    if note.Volume == last_note[chan_num].Volume:
+                        mask |= 64
+                    else:
+                        packed_note.write(struct.pack('<B', note.Volume))
+                        last_note[chan_num].Volume = note.Volume
+                        mask |= 4
+                if note.Effect is not None or note.EffectArg is not None:
+                    if (note.Effect == last_note[chan_num].Effect and 
+                        note.EffectArg == last_note[chan_num].EffectArg):
+                        mask |= 128
+                    else:
+                        mask |= 8
+                        write_effect = note.Effect
+                        write_effectarg = note.EffectArg
+                        if write_effect is None:
+                            write_effect = 0
+                        if write_effectarg is None:
+                            write_effectarg = 0
+                            
+                        last_note[chan_num].Effect = write_effect
+                        last_note[chan_num].EffectArg = write_effectarg
+                        
+                        packed_note.write(struct.pack('<BB',
+                                                      write_effect,
+                                                      write_effectarg))
+                
+                # Check if we will reuse last mask
+                if mask == masks[chan_num]:
+                    ptn_writer.write(struct.pack('<B', (chan_num + 1)))
+                else:
+                    ptn_writer.write(struct.pack('<BB',
+                                        (chan_num + 1) | 128,
+                                        mask))
+                    masks[chan_num] = mask
+                ptn_writer.write(packed_note.getvalue())
+                
             
+            # Write end-row marker.
+            ptn_writer.write("\x00")
+        
+        return ptn_writer.getvalue()
+        
         
     def load(self, inf):
         """Load IT pattern data from inf.  inf should already be seeked to
            the offset of the pattern to be loaded."""
         (ptnlen, rows, discard) = struct.unpack('<HH4s', inf.read(8))
-        self.ptnData = inf.read(ptnlen)
-        self.unpack(rows)
+        ptndata = inf.read(ptnlen)
+        
+        if not os.path.exists("ptn.dat"):
+            open("ptn.dat", "wb").write(ptndata)
+        self.unpack(rows, ptndata)
         
 class ITfile(object):
     Orderlist_offs = 192 # length of IT header before any dynamic data (order list)
@@ -861,7 +953,7 @@ def process():
 
     #logging.info("Cwt_v is 0x%04x" % (itf.Cwt_v,))
     
-    open("ptn.dat", "wb").write(itf.Patterns[0].ptnData)
+    #open("ptn.dat", "wb").write(itf.Patterns[0].ptnData)
     
     ## set all samples to "uncompressed" (should prevent re-saving of
     ## compressed samples in favour of uncompressed versions)
