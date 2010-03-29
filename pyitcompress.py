@@ -127,13 +127,13 @@ def it_decompress8(dest, len, srcbuf, it215):
         
         # now uncompress the data block
         while (blkpos < blklen):
-            log.debug("while2: blkpos = %d, blklen = %d" % (blkpos, blklen))
+            #log.debug("while2: blkpos = %d, blklen = %d" % (blkpos, blklen))
             
             value = it_readbits(width, state, srcbuf)
             
             if (width < 7):
                 # method 1 (1-6 bits)
-                log.debug("method 1")
+                #log.debug("method 1")
                 # check for "100..."
                 if (value == 1 << (width - 1)):
                     # yes!
@@ -142,7 +142,7 @@ def it_decompress8(dest, len, srcbuf, it215):
                     continue # ... next value
             elif (width < 9):
                 # method 2 (7-8 bits)
-                log.debug("method 2")
+                #log.debug("method 2")
                 border = (0xFF >> (9 - width)) - 4 # lower border for width chg
                 if (value > border and value <= (border + 8)):
                     value -= border # convert width to 1-8
@@ -151,7 +151,7 @@ def it_decompress8(dest, len, srcbuf, it215):
             elif (width == 9):
                 # method 3 (9 bits)
                 # bit 8 set?
-                log.debug("method 3: width=0x%x, value=0x%x" % (width, value))
+                #log.debug("method 3: width=0x%x, value=0x%x" % (width, value))
                 if (value & 0x100):
                     width = (value + 1) & 0xff # new width...
                     continue # ... and next value
