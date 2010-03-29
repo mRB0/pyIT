@@ -32,6 +32,9 @@ from cStringIO import StringIO
 import traceback
 import logging
 
+#import psyco
+#psyco.full()
+
 import pyitcompress
 
 
@@ -302,8 +305,8 @@ class ITsample(object):
         flags = flags | ((self.IsPingPongLoop) << 6)
         flags = flags | ((self.IsPingPongSusLoop) << 7)
 
-        log.debug("     Cvt (convert) = 0x%02x" % (self.Cvt,))
-        log.debug("     Flg (flags) = 0x%02x" % (flags,))
+        #log.debug("     Cvt (convert) = 0x%02x" % (self.Cvt,))
+        #log.debug("     Flg (flags) = 0x%02x" % (flags,))
         #self.Cvt = 0x01
         
         outf.write(struct.pack('<4s12s', 'IMPS', self.Filename))
@@ -549,11 +552,11 @@ class ITpattern(object):
                 self.Rows[row_num][chan_num].EffectArg = last_note[chan_num].EffectArg
             
         
-        row_num = 0
-        for row in self.Rows:
-            pretty_row = ' | '.join([str(row[x]) for x in xrange(4)])
-            log.debug("Row %02d: %s" % (row_num, pretty_row))
-            row_num = row_num + 1
+        #row_num = 0
+        #for row in self.Rows:
+        #    pretty_row = ' | '.join([str(row[x]) for x in xrange(4)])
+        #    log.debug("Row %02d: %s" % (row_num, pretty_row))
+        #    row_num = row_num + 1
                 
     def pack(self):
         """
@@ -656,7 +659,7 @@ class ITfile(object):
                         # version") upon write().
     
     def __init__(self):
-        self.SongName = 'gohoho'
+        self.SongName = ''
         self.PHilight_minor = 4
         self.PHilight_major = 16
         
@@ -951,11 +954,13 @@ class ITfile(object):
         return (ptnlist, ptns) 
 
 def process():
-    logging.basicConfig(level=logging.DEBUG)
+    #logging.basicConfig(level=logging.DEBUG, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
+    logging.basicConfig(level=logging.DEBUG, format="%(name)-24s %(levelname)-7s %(message)s")
+    
     # pyitcompress is like, really noisy on the DEBUG channel,
     # and sample compression slows down a shitload if you let it print
     # all that shit to your screen.
-    logging.getLogger("pyitcompress").setLevel(level=logging.WARNING)
+    #logging.getLogger("pyitcompress").setLevel(level=logging.WARNING)
     
     itf = ITfile()
     
