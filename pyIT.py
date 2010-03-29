@@ -680,7 +680,7 @@ class ITfile(object):
         # msglen is also collected by actual message length
         self.Message = ''
         
-        self.ChannelPans = 64*[64]
+        self.ChannelPans = 64*[32]
         self.ChannelVols = 64*[64]
         
         self.Orders = []
