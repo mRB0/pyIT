@@ -655,8 +655,8 @@ class ITpattern(object):
         
 class ITfile(object):
     Orderlist_offs = 192 # length of IT header before any dynamic data (order list)
-    pyIT_Cwt_v = 0x4101 # This value will be written into Cwt_v ("compatible with
-                        # version") upon write().
+    pyIT_Cwt_v = 0x4101 # This value will be written into Cwt_v ("created with
+                        # tracker version") upon write().
     
     def __init__(self):
         self.SongName = ''
