@@ -28,7 +28,6 @@
 # ------------------------------------------------------------------------------------------------------------
 # IT decompression code from itsex.c (Cubic Player) and load_it.cpp (Modplug)
 # (I suppose this could be considered a merge between the two.)
-import struct
 import sys
 import logging
 
@@ -54,7 +53,7 @@ def it_readbits(n, state, stream):
     while i:
         i -= 1
         if not state.bitnum:
-            state.bitbuf = struct.unpack('@B', stream.read(1))[0]
+            state.bitbuf = ord(stream.read(1))
             state.bitnum = 8
         value >>= 1
         #log.debug("state.bitbuf = 0x%x, state.bitbuf<<31 = 0x%x" % (state.bitbuf, state.bitbuf<<31))
@@ -67,19 +66,23 @@ def it_readbits(n, state, stream):
 
 def signbyte(b):
     #logging.getLogger("pyitcompress.signbyte").debug("signbyte: converting %d" % (b,))
-    return struct.unpack('b', struct.pack('B', b))[0]
+    if (b > 127):
+        return b - 256
+    return b
 
 def unsignbyte(b):
     #logging.getLogger("pyitcompress.unsignbyte").debug("converting %d" % (b,))
-    return struct.unpack('B', struct.pack('b', b))[0]
+    return b % 256
 
 def signword(w):
     #logging.getLogger("pyitcompress.signword").debug("converting %d" % (b,))
-    return struct.unpack('h', struct.pack('H', w))[0]
+    if (w > 32767):
+        return w - 65536
+    return w
 
 def unsignword(w):
     #logging.getLogger("pyitcompress.unsignword").debug("converting %d" % (b,))
-    return struct.unpack('H', struct.pack('h', w))[0]
+    return w % 65536
 
 def it_decompress8(dest, len, srcbuf, it215):
     """
@@ -173,7 +176,7 @@ def it_decompress8(dest, len, srcbuf, it215):
             d2 = signbyte((unsignbyte(d2) + unsignbyte(d1)) & 0xff)
             
             # .. and store it into the buffer
-            dest.write(struct.pack('b', d2) if it215 else struct.pack('b', d1))
+            dest.write(chr(unsignbyte(d2)) if it215 else chr(unsignbyte(d1)))
             blkpos += 1
 
         # now subtract block length from total length and go on
@@ -269,9 +272,8 @@ def it_decompress16(dest, len, srcbuf, it215):
             
             # .. and store it into the buffer
             outval = d2 if it215 else d1
-            #dest.write(struct.pack('B', outval & 0xff) if it215 else struct.pack('b', outval >> 8))
-            dest.write(struct.pack('B', outval & 0xff))
-            dest.write(struct.pack('b', outval >> 8))
+            dest.write(chr(outval & 0xff))
+            dest.write(chr(unsignbyte(outval >> 8)))
             blkpos += 1
 
         # now subtract block length from total length and go on
