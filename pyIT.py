@@ -974,8 +974,8 @@ def process():
     
     ## set all samples to "uncompressed" (should prevent re-saving of
     ## compressed samples in favour of uncompressed versions)
-    #for samp in itf.Samples:
-        #samp.IsCompressed = False
+    for samp in itf.Samples:
+        samp.IsCompressed = False
     
     ## modify all samples very slightly (should prevent re-saving of compressed
     ## samples in favour of uncompressed versions)
