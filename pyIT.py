@@ -649,8 +649,6 @@ class ITpattern(object):
         (ptnlen, rows, discard) = struct.unpack('<HH4s', inf.read(8))
         ptndata = inf.read(ptnlen)
         
-        if not os.path.exists("ptn.dat"):
-            open("ptn.dat", "wb").write(ptndata)
         self.unpack(rows, ptndata)
         
 class ITfile(object):
@@ -969,8 +967,6 @@ def process():
     itf.open(sys.argv[1])
 
     #logging.info("Cwt_v is 0x%04x" % (itf.Cwt_v,))
-    
-    #open("ptn.dat", "wb").write(itf.Patterns[0].ptnData)
     
     ## set all samples to "uncompressed" (should prevent re-saving of
     ## compressed samples in favour of uncompressed versions)
