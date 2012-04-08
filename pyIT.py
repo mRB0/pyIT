@@ -488,6 +488,10 @@ class ITpattern(object):
     def __eq__(self, other):
         return self.Rows == other.Rows
         
+    def isEmpty(self):
+        """ 'empty' here uses the IT definition of a 64-row pattern with no note data. """
+        return self == ITpattern()
+        
     def write(self, outf):
         ptndata = self.pack()
         outf.write(struct.pack('<HH4s', len(ptndata), len(self.Rows), '\0'*4))
@@ -838,7 +842,7 @@ class ITfile(object):
         ptn_offsets = {} 
         offs = ptn_offs
         for x in pattern_list:
-            if x not in ptn_offsets:
+            if x is not False and x not in ptn_offsets:
                 # unknown pattern
                 
                 # store new pattern offset
@@ -906,7 +910,14 @@ class ITfile(object):
         
         # save patterns (packed)
         for x in pattern_list:
-            outf.write(struct.pack('<I', ptn_offsets[x]))
+            if x is False:
+                log.debug("write empty pattern offs")
+                ptnoffs = 0
+            else:
+                log.debug("write real pattern offs")
+                ptnoffs = ptn_offsets[x]
+                
+            outf.write(struct.pack('<I', ptnoffs))
         
         assert(outf.tell() == msg_offs)
         if message:
@@ -914,6 +925,7 @@ class ITfile(object):
         assert(outf.tell() == ptn_offs)
         
         for ptn in unique_ITpatterns:
+            log.debug("write pattern")
             ptn.write(outf)
         assert(outf.tell() == samp_offs)
         
@@ -945,7 +957,10 @@ class ITfile(object):
         ptns = []
         
         for ptn in self.Patterns:
-            if ptn in ptns:
+            if ptn.isEmpty():
+                # empty pattern is empty
+                ptnlist.append(False)
+            elif ptn in ptns:
                 # already in pattern set, create a reference only
                 ptnlist.append(ptns.index(ptn))
             else:
