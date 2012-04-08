@@ -56,33 +56,51 @@ def it_readbits(n, state, stream):
             state.bitbuf = ord(stream.read(1))
             state.bitnum = 8
         value >>= 1
-        #log.debug("state.bitbuf = 0x%x, state.bitbuf<<31 = 0x%x" % (state.bitbuf, state.bitbuf<<31))
+        #logging.debug("state.bitbuf = 0x%x, state.bitbuf<<31 = 0x%x" % (state.bitbuf, state.bitbuf<<31))
         value |= (state.bitbuf << 31) & 0xffffffff
         state.bitbuf >>= 1
         state.bitnum -= 1
 
     return value >> (32 - n)
 
+##
+## Converting an unsigned value to a signed one.
+##
+#
+# byte_signer_pack = struct.Struct("@B")
+# byte_signer_unpack = struct.Struct("@b")
+#
+# >>> def signbyte(b): return b - 256 if b > 127 else b
+# ...
+# >>> def signbyte_s(b): return byte_signer_unpack.unpack(byte_signer_pack.pack(b))[0]
+# ...
+# >>> def signbyte_s2(b): return struct.unpack("@b", struct.pack("@B", b))[0]
+# ...
+# >>> timeit.repeat(lambda: signbyte(234))
+# [0.3214220080452037, 0.3246569789375826, 0.3103202065507844]
+# >>> timeit.repeat(lambda: signbyte_s(234))
+# [0.665931344571618, 0.6369421357301803, 0.6587316597669997]
+# >>> timeit.repeat(lambda: signbyte_s2(234))
+# [0.8120824689951291, 0.7978116412757572, 0.7951949434834091]
+#
+##
+## Word (16-bit) conversions have similar characteristics.
+##
 
 def signbyte(b):
-    #logging.getLogger("pyitcompress.signbyte").debug("signbyte: converting %d" % (b,))
-    if (b > 127):
-        return b - 256
-    return b
+    return b - 256 if b > 127 else b
 
 def unsignbyte(b):
     #logging.getLogger("pyitcompress.unsignbyte").debug("converting %d" % (b,))
-    return b % 256
+    return b & 0xff
 
 def signword(w):
     #logging.getLogger("pyitcompress.signword").debug("converting %d" % (b,))
-    if (w > 32767):
-        return w - 65536
-    return w
+    return w - 65536 if w > 32767 else w
 
 def unsignword(w):
     #logging.getLogger("pyitcompress.unsignword").debug("converting %d" % (b,))
-    return w % 65536
+    return w & 0xffff
 
 def it_decompress8(dest, len, srcbuf, it215):
     """
@@ -109,13 +127,13 @@ def it_decompress8(dest, len, srcbuf, it215):
     log = logging.getLogger("pyitcompress.it_decompress8")
     
     startpos = srcbuf.tell()
-    log.debug("startpos = %d" % (startpos,))
+    #log.debug("startpos = %d" % (startpos,))
     
     # now unpack data till the dest buffer is full
     while (len):
         # read a new block of compressed data and reset variables
         # block layout: word size, <size> bytes data
-        
+
         # removed: error handling when data is truncated
         if not srcbuf.read(2):
             return
@@ -124,6 +142,8 @@ def it_decompress8(dest, len, srcbuf, it215):
         
         blklen = MIN(0x8000, len)
         blkpos = 0
+
+        #log.debug("new block, len = %d", blklen)
         
         width = 9 # start with width of 9 bits
         d1 = d2 = 0 # reset integrator buffers
@@ -136,7 +156,7 @@ def it_decompress8(dest, len, srcbuf, it215):
             
             if (width < 7):
                 # method 1 (1-6 bits)
-                #log.debug("method 1")
+                #log.debug("method 1: width=0x%x, value=0x%x" % (width, value))
                 # check for "100..."
                 if (value == 1 << (width - 1)):
                     # yes!
@@ -145,7 +165,7 @@ def it_decompress8(dest, len, srcbuf, it215):
                     continue # ... next value
             elif (width < 9):
                 # method 2 (7-8 bits)
-                #log.debug("method 2")
+                #log.debug("method 2: width=0x%x, value=0x%x" % (width, value))
                 border = (0xFF >> (9 - width)) - 4 # lower border for width chg
                 if (value > border and value <= (border + 8)):
                     value -= border # convert width to 1-8
@@ -168,22 +188,23 @@ def it_decompress8(dest, len, srcbuf, it215):
                 shift = 8 - width
                 v = signbyte((value << shift) & 0xff)
                 v >>= shift
+                v = (v & 0xff)
             else:
-                v = signbyte(value & 0xff)
+                v = value & 0xff
             
             # integrate upon the sample values
-            d1 = signbyte((unsignbyte(d1) + unsignbyte(v)) & 0xff)
-            d2 = signbyte((unsignbyte(d2) + unsignbyte(d1)) & 0xff)
+            d1 = (d1 + v) & 0xff
+            d2 = (d2 + d1) & 0xff
             
             # .. and store it into the buffer
-            dest.write(chr(unsignbyte(d2)) if it215 else chr(unsignbyte(d1)))
+            dest.write(chr(d2) if it215 else chr(d1))
             blkpos += 1
 
         # now subtract block length from total length and go on
         len -= blklen
     
     compressed_len = srcbuf.tell() - startpos
-    log.debug("size of compressed data: %d bytes" % (compressed_len))
+    #log.debug("size of compressed data: %d bytes" % (compressed_len))
     
     return compressed_len
 
@@ -209,7 +230,7 @@ def it_decompress16(dest, len, srcbuf, it215):
     log = logging.getLogger("pyitcompress.it_decompress16")
     
     startpos = srcbuf.tell()
-    log.debug("startpos = %d" % (startpos,))
+    #log.debug("startpos = %d" % (startpos,))
 
     # now unpack data till the dest buffer is full
     while (len):
@@ -264,11 +285,11 @@ def it_decompress16(dest, len, srcbuf, it215):
                 v = signword((value << shift) & 0xffff)
                 v >>= shift
             else:
-                v = signword(value & 0xffff)
+                v = (value & 0xffff)
             
             # integrate upon the sample values
-            d1 = signword((unsignword(d1) + unsignword(v)) & 0xffff)
-            d2 = signword((unsignword(d2) + unsignword(d1)) & 0xffff)
+            d1 = (d1 + v) & 0xffff
+            d2 = (d2 + d1) & 0xffff
             
             # .. and store it into the buffer
             outval = d2 if it215 else d1
@@ -280,7 +301,7 @@ def it_decompress16(dest, len, srcbuf, it215):
         len -= blklen
 
     compressed_len = srcbuf.tell() - startpos
-    log.debug("size of compressed data: %d bytes" % (compressed_len))
+    #log.debug("size of compressed data: %d bytes" % (compressed_len))
     
     return compressed_len
 
