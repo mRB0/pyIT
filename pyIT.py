@@ -481,7 +481,7 @@ class ITpattern(object):
         # self.Rows[4][2] would return the note on the third channel in 
         # the fifth row.
         self.Rows = [[ITnote() for i in xrange(64)] for j in xrange(64)]
-    
+
     def __len__(self):
         return len(self.pack()) + 8
     
@@ -499,6 +499,8 @@ class ITpattern(object):
         """
         
         log = logging.getLogger("pyIT.ITpattern.unpack")
+
+        log.info("load pattern: rows = %d, len = %d" %(rows, len(ptndata),))
         
         ptn_reader = StringIO(ptndata)
         masks = [0] * 64 # prepare mask variables
@@ -563,7 +565,7 @@ class ITpattern(object):
         Pack pattern data back and return it as a string of raw data.
         """
         log = logging.getLogger("pyIT.ITpattern.unpack")
-        
+
         ptn_writer = StringIO()
         masks = [0] * 64 # prepare mask variables
         last_note = [ITnote() for i in xrange(64)] # last note storage
@@ -757,10 +759,12 @@ class ITfile(object):
         self.Patterns = []
         
         for offs_ptn in offs_ptns:
-            inf.seek(offs_ptn)
-            
             ptn = ITpattern()
-            ptn.load(inf)
+            if offs_ptn != 0:
+                inf.seek(offs_ptn)
+                
+                ptn.load(inf)
+                
             self.Patterns.append(ptn)
         
         # load instruments
