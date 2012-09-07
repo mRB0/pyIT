@@ -430,6 +430,9 @@ class ITnote(object):
                 self.Effect == other.Effect and
                 self.EffectArg == other.EffectArg)
         
+    def __ne__(self, other):
+        return not (self == other)
+    
     def note_num_as_str(self, note_num):
         # C C# D D# E F F# G G# A A# B
         if self.Note is None:
@@ -487,7 +490,10 @@ class ITpattern(object):
     
     def __eq__(self, other):
         return self.Rows == other.Rows
-        
+    
+    def __ne__(self, other):
+        return not (self == other)
+    
     def isEmpty(self):
         """ 'empty' here uses the IT definition of a 64-row pattern with no note data. """
         return self == ITpattern()
